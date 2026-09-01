@@ -277,6 +277,16 @@ ul,ol{margin:0;padding:0;list-style:none}
 }
 .hero__cap h1{font-size:clamp(19px,5vw,25px);font-weight:500;letter-spacing:-.01em}
 .hero__cap p{font-size:13px;color:var(--muted);max-width:30ch;line-height:1.7}
+/* Once the window has taken the viewport the caption sits on the photograph.
+   The heading inherits white from the inline style; the subtitle has its own
+   colour and would stay grey on orange, so it is switched here — and a soft
+   scrim under both keeps them legible whatever frame they land on. */
+.hero__cap.is-over p{color:rgba(255,255,255,.88)}
+.hero__cap.is-over::before{
+  content:'';position:absolute;z-index:-1;inset:-30px -20px -220px;
+  background:linear-gradient(to top,rgba(11,11,12,.5),rgba(11,11,12,.28) 42%,transparent);
+  pointer-events:none;
+}
 
 .hero__cue{
   position:absolute;z-index:5;bottom:calc(var(--dock) - 22px);left:50%;

@@ -222,9 +222,11 @@ function drive(nodes) {
     const cOut = range(p, 0.97, 1);
     cap.style.opacity = String(cIn * (1 - cOut));
     cap.style.transform = `translateY(${lerp(16, 0, cIn)}px)`;
-    // White type once the photo is behind it.
-    cap.style.color = open > 0.35 ? '#fff' : '';
-    cap.style.textShadow = open > 0.35 ? '0 1px 26px rgba(0,0,0,.42)' : 'none';
+    // White type once the photo is behind it, scrim and all.
+    const over = open > 0.35;
+    cap.classList.toggle('is-over', over);
+    cap.style.color = over ? '#fff' : '';
+    cap.style.textShadow = over ? '0 1px 20px rgba(11,11,12,.45)' : 'none';
 
     /* the cue */
     cue.style.opacity = String(1 - range(p, 0, 0.06));
