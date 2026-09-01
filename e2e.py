@@ -6,13 +6,13 @@
     python3 e2e.py https://ilyatabrizi.github.io/kaya/   # the deployed build
 
 Drives a real mobile browser through every screen and every action a customer
-takes — hero scrub, shop, item, custom brief, bag, checkout, order, profile,
-CRM — and fails loudly on anything broken.
+takes — the floating-cutout hero, shop, item, bespoke brief, bag, checkout,
+order, profile, studio panel — and fails loudly on anything broken.
 
-The hero gets its own section because it is the part that cannot be checked by
-reading the DOM alone: it has to be scrolled, and the video has to actually
-seek. A hidden tab freezes requestAnimationFrame, so this runs a real visible
-browser rather than an automation pane.
+The hero gets its own section because it cannot be checked by reading the DOM
+alone: it has to be scrolled, and the canvas has to actually advance through
+the frames. A hidden tab freezes requestAnimationFrame, so this runs a real
+visible browser rather than an automation pane.
 
 Screenshots land in scripts/shots/.
 """
@@ -50,81 +50,89 @@ def shot(page, name):
 # ------------------------------------------------------------------- hero
 def test_hero(page):
     page.goto(BASE, wait_until="load")
-    page.wait_for_timeout(1800)          # boot screen + first paint
+    page.wait_for_timeout(2200)          # boot screen + first frames
 
     check("boot screen clears",
           page.evaluate("!document.getElementById('boot')"), "boot still in DOM")
 
-    win = page.evaluate("""() => {
-      const w = document.querySelector('.hero__win');
-      return w ? { w: w.getBoundingClientRect().width|0,
-                   h: w.getBoundingClientRect().height|0 } : null; }""")
-    check("hero window is laid out", win and win["w"] > 120 and win["h"] > 200, str(win))
+    box = page.evaluate("""() => {
+      const b = document.querySelector('.hero__objbox');
+      return b ? { w: b.getBoundingClientRect().width|0,
+                   h: b.getBoundingClientRect().height|0 } : null; }""")
+    check("hero object is laid out", box and box["w"] > 200 and box["h"] > 300, str(box))
 
-    check("hero video decoded",
-          page.evaluate("() => { const v=document.querySelector('.hero__vid');"
-                        "return !!v && v.readyState >= 2 && v.duration > 5; }"),
-          "video not ready")
-    check("poster hands over to video",
-          page.evaluate("() => document.querySelector('.hero__vid')"
-                        ".classList.contains('is-on')"), "video never revealed")
+    check("hero is a canvas cutout, not a video",
+          page.evaluate("() => !document.querySelector('.hero video')"
+                        " && !!document.querySelector('canvas.hero__obj')"),
+          "found a <video> in the hero")
+
+    check("frames start arriving",
+          page.evaluate("""async () => {
+            for (let i = 0; i < 40; i++) {
+              if (document.querySelector('.hero__obj')?.dataset.frame !== undefined)
+                return true;
+              await new Promise(r => setTimeout(r, 250));
+            }
+            return false;
+          }"""), "no frame ever drawn")
+    check("poster hands over to the canvas",
+          page.evaluate("() => document.querySelector('.hero__posterimg')"
+                        ".classList.contains('is-gone')"), "poster never released")
 
     shot(page, "01-hero-top")
 
-    # Scroll the whole sticky section and sample the scrub at each stop.
+    # Scroll the sticky section and sample the scrub at each stop.
     samples = page.evaluate("""async () => {
       const sect = document.querySelector('.hero');
-      const v = document.querySelector('.hero__vid');
-      const win = document.querySelector('.hero__win');
+      const cv = document.querySelector('.hero__obj');
       const total = sect.getBoundingClientRect().height - innerHeight;
       const out = [];
       for (const f of [0, .25, .5, .75, 1]) {
         scrollTo(0, Math.round(total * f));
-        await new Promise(r => setTimeout(r, 700));
-        out.push({ f, t: +v.currentTime.toFixed(2),
-                   w: win.getBoundingClientRect().width|0,
-                   h: win.getBoundingClientRect().height|0,
-                   cap: +(document.querySelector('.hero__cap').style.opacity || 0),
-                   word: +(document.querySelector('.hero__word').style.opacity || 1) });
+        await new Promise(r => setTimeout(r, 750));
+        out.push({ f,
+                   frame: Number(cv.dataset.frame || -1),
+                   scale: Number(cv.dataset.scale || 1),
+                   word: +(document.querySelector('.hero__word').style.opacity || 1),
+                   cap: +(document.querySelector('.hero__cap').style.opacity || 0) });
       }
       return out;
     }""")
 
-    times = [s["t"] for s in samples]
-    check("scrub advances with scroll",
-          all(times[i] < times[i + 1] for i in range(len(times) - 1)),
-          f"currentTime did not increase: {times}")
-    check("scrub covers the whole clip",
-          times[0] < 0.6 and times[-1] > 9.0, f"range {times[0]}..{times[-1]}")
-
-    widths = [s["w"] for s in samples]
-    check("window opens to full bleed",
-          widths[-1] >= PHONE["width"] - 2 and widths[0] < widths[-1],
-          f"widths {widths}")
-    check("wordmark clears as the scrub starts",
+    frames = [s["frame"] for s in samples]
+    count = page.evaluate("() => import('./js/hero-manifest.js').then(m => m.HERO.count)")
+    check("scrub advances through the frames",
+          all(frames[i] < frames[i + 1] for i in range(len(frames) - 1)),
+          f"frames {frames}")
+    check("scrub reaches the deep frames",
+          frames[0] <= 2 and frames[-1] >= count * 0.85, f"range {frames}, count {count}")
+    check("the dive zooms into the blooms",
+          samples[-1]["scale"] > 1.6 and samples[0]["scale"] <= 1.02,
+          f"scales {[s['scale'] for s in samples]}")
+    check("wordmark clears as the turn starts",
           samples[0]["word"] > 0.9 and samples[2]["word"] < 0.1,
           f"word opacity {[s['word'] for s in samples]}")
-    check("caption arrives on the reveal",
-          samples[0]["cap"] < 0.05 and samples[-2]["cap"] > 0.5,
+    check("caption arrives at the end",
+          samples[0]["cap"] < 0.05 and samples[-1]["cap"] > 0.8,
           f"cap opacity {[s['cap'] for s in samples]}")
 
     page.evaluate("scrollTo(0, document.querySelector('.hero')"
                   ".getBoundingClientRect().height - innerHeight)")
     settle(page, 900)
-    shot(page, "02-hero-reveal")
+    shot(page, "02-hero-dive")
 
-    # Scrubbing backwards must work as well as forwards.
+    # Backwards must work as well as forwards.
     back = page.evaluate("""async () => {
-      const v = document.querySelector('.hero__vid');
       scrollTo(0, 0);
       await new Promise(r => setTimeout(r, 900));
-      return +v.currentTime.toFixed(2);
+      return Number(document.querySelector('.hero__obj').dataset.frame);
     }""")
-    check("scrub runs backwards", back < 1.0, f"currentTime {back} after scrolling home")
+    check("scrub runs backwards", back <= 3, f"frame {back} after scrolling home")
 
     check("top bar takes over after the hero",
           page.evaluate("""async () => {
-            scrollTo(0, innerHeight * 2.6);
+            const hero = document.querySelector('.hero');
+            scrollTo(0, hero.offsetTop + hero.offsetHeight + 60);
             await new Promise(r => setTimeout(r, 500));
             return document.getElementById('topbar').classList.contains('is-on');
           }"""), "topbar never appeared")
@@ -156,12 +164,12 @@ def test_shop(page):
     n_all = page.locator(".card").count()
     check("shop lists every piece", n_all == 7, f"{n_all} cards")
 
-    page.locator(".chips .chip", has_text="دسته‌گل").first.click()
+    page.locator(".chips .chip", has_text="Bouquets").first.click()
     settle(page)
     n_bq = page.locator(".card").count()
     check("category filter narrows the list", 0 < n_bq < n_all, f"{n_bq} of {n_all}")
 
-    page.locator(".chips .chip", has_text="همه").first.click()
+    page.locator(".chips .chip", has_text="All").first.click()
     settle(page)
     page.select_option("select.inp", "low")
     settle(page)
@@ -178,12 +186,13 @@ def test_shop(page):
 def test_item(page):
     goto(page, "/p/aftab")
     check("item page titles the piece",
-          "آفتاب" in page.locator(".item__head h1").inner_text())
-    check("item shows a price", page.locator(".item__price").count() == 1)
+          "Aftab" in page.locator(".item__head h1").inner_text())
+    check("item shows a price in Toman",
+          "Toman" in page.locator(".item__price").inner_text())
     check("item lists the stems", page.locator(".panel .row__t").count() >= 4)
 
     base = page.locator(".dock__price b").inner_text()
-    page.locator(".opt", has_text="بزرگ").first.click()
+    page.locator(".opt", has_text="Grand").first.click()
     settle(page)
     big = page.locator(".dock__price b").inner_text()
     check("size changes the price", base != big, f"{base} vs {big}")
@@ -205,7 +214,7 @@ def test_item(page):
 # ----------------------------------------------------------------- custom
 def test_custom(page):
     goto(page, "/custom")
-    check("custom starts on step 1",
+    check("bespoke starts on step 1",
           page.locator(".steps i.is-on").count() == 1)
     check("next is blocked until a choice is made",
           page.locator("button.btn:not(.btn--ghost)").last.is_disabled(),
@@ -217,21 +226,21 @@ def test_custom(page):
         page.locator("button.btn:not(.btn--ghost)").last.click()
         settle(page, 380)
 
-    pick_and_next("تولد")
-    pick_and_next("دسته‌گل")
-    pick_and_next("صورتی")
-    page.locator(".opt", has_text="رز").first.click()
+    pick_and_next("Birthday")
+    pick_and_next("Bouquet")
+    pick_and_next("Pink")
+    page.locator(".opt", has_text="Rose").first.click()
     settle(page, 160)
     page.locator("button.btn:not(.btn--ghost)").last.click()   # flowers -> budget
     settle(page, 380)
-    check("budget step shows a figure", page.locator(".rng").count() == 1)
+    check("budget step shows a slider", page.locator(".rng").count() == 1)
     page.locator("button.btn:not(.btn--ghost)").last.click()   # budget -> details
     settle(page, 420)
 
     check("summary reflects the picks",
-          "تولد" in page.locator(".panel").last.inner_text(), "occasion missing")
+          "Birthday" in page.locator(".panel").last.inner_text(), "occasion missing")
 
-    page.locator("input.inp").first.fill("سارا مهدوی")
+    page.locator("input.inp").first.fill("Sara Mahdavi")
     page.locator('input[type="tel"]').first.fill("0912")
     settle(page, 220)
     check("bad phone blocks submission",
@@ -246,11 +255,11 @@ def test_custom(page):
     shot(page, "06-custom")
     page.locator("button.btn:not(.btn--ghost)").last.click()
     settle(page, 700)
-    check("custom brief lands in the bag",
+    check("the brief lands in the bag",
           page.evaluate("() => JSON.parse(localStorage.getItem('kaya.v1')).bag"
                         ".some(l => l.custom && l.brief && l.brief.occasion)"),
           "no custom line with a brief")
-    check("custom brief redirects to the bag", "#/bag" in page.url, page.url)
+    check("the brief redirects to the bag", "#/bag" in page.url, page.url)
 
 
 # -------------------------------------------------------- bag + checkout
@@ -276,14 +285,15 @@ def test_checkout(page):
     page.locator(".chips .chip").nth(1).click()          # a delivery day
     settle(page, 160)
 
-    fields = page.locator("textarea.inp")
-    fields.first.fill("تبریز، خیابان ولیعصر، کوچه گلها، پلاک ۱۲")
-    inputs = page.locator('input.inp')
-    # recipient name, recipient phone, unit, buyer name, buyer phone
-    page.locator('.panel', has_text="گیرنده").locator('input.inp').nth(0).fill("الهام رستمی")
-    page.locator('.panel', has_text="گیرنده").locator('input[type="tel"]').first.fill("09355550187")
-    page.locator('.panel', has_text="شما").locator('input.inp').first.fill("سارا مهدوی")
-    page.locator('.panel', has_text="شما").locator('input[type="tel"]').first.fill("09145550132")
+    page.locator("textarea.inp").first.fill("12 Golha Lane, Valiasr, Tabriz")
+    # has_text is substring, and "You" would also match the Recipient panel's
+    # "your own name…" — pin each panel by its exact title instead.
+    rec = page.locator(".panel", has=page.locator('.panel__t:text-is("Recipient")'))
+    you = page.locator(".panel", has=page.locator('.panel__t:text-is("You")'))
+    rec.locator("input.inp").nth(0).fill("Elham Rostami")
+    rec.locator('input[type="tel"]').first.fill("09355550187")
+    you.locator("input.inp").first.fill("Sara Mahdavi")
+    you.locator('input[type="tel"]').first.fill("09145550132")
     settle(page, 400)
     check("submit unblocks once the form is valid",
           not page.locator(".btn--lg").is_disabled(), "still disabled")
@@ -303,7 +313,7 @@ def test_checkout(page):
 def test_account(page):
     goto(page, "/account")
     check("profile shows the saved name",
-          "سارا" in page.locator(".page__head h1, h1").first.inner_text(),
+          "Sara" in page.locator("h1").first.inner_text(),
           page.locator("h1").first.inner_text())
     check("profile counts orders", page.locator(".stat").count() == 4)
     goto(page, "/orders")
@@ -314,7 +324,7 @@ def test_account(page):
 # -------------------------------------------------------------------- crm
 def test_crm(page):
     goto(page, "/crm", ms=700)
-    check("crm is locked by default", page.locator(".pin input").count() == 4,
+    check("studio is locked by default", page.locator(".pin input").count() == 4,
           "no passcode screen")
 
     cells = page.locator(".pin input")
@@ -330,30 +340,28 @@ def test_crm(page):
     settle(page, 800)
     check("right passcode unlocks the panel", page.locator(".tabs").count() == 1,
           "panel did not open")
-    check("crm shows the day's figures", page.locator(".stat").count() == 4)
-    check("crm board lists orders", page.locator(".ord").count() >= 1,
+    check("studio shows the day's figures", page.locator(".stat").count() == 4)
+    check("studio board lists orders", page.locator(".ord").count() >= 1,
           f"{page.locator('.ord').count()} order cards")
 
     shot(page, "11-crm")
 
-    page.locator(".tabs button", has_text="جدید").click()
+    page.locator(".tabs button", has_text="New").click()
     settle(page, 400)
     n_new = page.locator(".ord").count()
     check("new column has the fresh order", n_new >= 1, f"{n_new}")
 
-    adv = page.locator(".ord .chip").first
-    label = adv.inner_text()
-    adv.click()
+    page.locator(".ord .chip").first.click()
     settle(page, 500)
     check("status advances off the new column",
           page.locator(".ord").count() == n_new - 1,
           f"still {page.locator('.ord').count()} in new")
 
-    page.locator(".tabs button", has_text="مشتری").click()
+    page.locator(".tabs button", has_text="Customers").click()
     settle(page, 400)
-    check("crm derives a customer list", page.locator(".row--btn").count() >= 1)
+    check("studio derives a customer list", page.locator(".row--btn").count() >= 1)
 
-    page.locator(".tabs button", has_text="موجودی").click()
+    page.locator(".tabs button", has_text="Stock").click()
     settle(page, 400)
     check("stock toggles exist for every piece", page.locator(".sw").count() == 7,
           f"{page.locator('.sw').count()} toggles")
@@ -361,7 +369,7 @@ def test_crm(page):
     settle(page, 400)
     goto(page, "/shop")
     check("an out-of-stock piece is marked in the shop",
-          page.locator(".card__tag", has_text="موجود نیست").count() >= 1,
+          page.locator(".card__tag", has_text="Out of stock").count() >= 1,
           "no out-of-stock badge")
     shot(page, "12-crm-stock")
 
@@ -374,12 +382,12 @@ def test_pwa(page):
       const j = await r.json();
       return { name: j.short_name, display: j.display, icons: j.icons.length,
                maskable: j.icons.some(i => i.purpose === 'maskable'),
-               start: j.start_url, dir: j.dir, lang: j.lang,
+               dir: j.dir, lang: j.lang,
                shortcuts: (j.shortcuts||[]).length };
     }""")
     check("manifest names the app KAYA", m["name"] == "KAYA", str(m["name"]))
     check("manifest is standalone", m["display"] == "standalone")
-    check("manifest is RTL Persian", m["dir"] == "rtl" and m["lang"] == "fa")
+    check("manifest is English LTR", m["dir"] == "ltr" and m["lang"] == "en")
     check("manifest ships a full icon set", m["icons"] >= 10, str(m["icons"]))
     check("manifest has a maskable icon", m["maskable"])
     check("manifest declares shortcuts", m["shortcuts"] == 3)
@@ -392,21 +400,31 @@ def test_pwa(page):
           page.get_attribute('meta[name="apple-mobile-web-app-title"]', 'content') == 'KAYA')
 
 
-# ------------------------------------------------------------------ rtl
-def test_rtl_and_type(page):
+# --------------------------------------------------------------- language
+def test_language(page):
     goto(page, "/")
-    check("document is RTL Persian",
-          page.get_attribute("html", "dir") == "rtl"
-          and page.get_attribute("html", "lang") == "fa")
-    check("body renders in IRANYekanX",
-          "YekanX" in page.evaluate("() => getComputedStyle(document.body).fontFamily"))
+    check("document is English LTR",
+          page.get_attribute("html", "dir") == "ltr"
+          and page.get_attribute("html", "lang") == "en")
+    check("body renders in Inter",
+          "Inter" in page.evaluate("() => getComputedStyle(document.body).fontFamily"))
+    check("display type is Playfair",
+          "Playfair" in page.evaluate(
+              "() => getComputedStyle(document.querySelector('.sect__head h2')).fontFamily"))
+    for path in ("/", "/shop", "/about"):
+        goto(page, path, ms=600)
+        fa = page.evaluate(
+            "() => /[\\u0600-\\u06FF]/.test(document.getElementById('main').innerText)")
+        check(f"no Persian glyphs on {path}", not fa, "Persian text found")
+    goto(page, "/shop", ms=600)
+    check("prices read in Toman",
+          page.evaluate("() => document.querySelector('.card__price')"
+                        ".textContent.includes('Toman')"))
+    goto(page, "/")
     check("no page-level horizontal scroll",
           page.evaluate("() => document.documentElement.scrollWidth <= innerWidth + 1"),
           page.evaluate("() => document.documentElement.scrollWidth + ' vs ' + innerWidth"))
-    # Latin phone numbers and handles must not be reordered by bidi.
     goto(page, "/about")
-    check("phone numbers are isolated LTR",
-          page.locator('[dir="ltr"]').count() >= 2)
     check("about page answers the common questions",
           page.locator(".row--btn[aria-expanded]").count() >= 5)
     shot(page, "13-about")
@@ -448,8 +466,7 @@ def test_desktop(page):
         check_grid(page, f"shop @{w}")
     page.set_viewport_size(PHONE)
     goto(page, "/", ms=700)
-    page.evaluate("scrollTo(0, document.querySelector('.hero')"
-                  ".getBoundingClientRect().height + 300)")
+    page.evaluate("scrollTo(0, document.querySelector('.hero').getBoundingClientRect().height + 300)")
     settle(page, 400)
     check_grid(page, "home @390")
 
@@ -481,7 +498,7 @@ def main():
         browser = pw.chromium.launch(channel="chrome")
         ctx = browser.new_context(
             viewport=PHONE, device_scale_factor=2, is_mobile=True,
-            has_touch=True, locale="fa-IR", reduced_motion="no-preference",
+            has_touch=True, locale="en-US", reduced_motion="no-preference",
             user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
                        "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile Safari/604.1",
         )
@@ -492,7 +509,7 @@ def main():
 
         for fn in (test_hero, test_home, test_shop, test_item, test_custom,
                    test_checkout, test_account, test_crm, test_pwa,
-                   test_rtl_and_type, test_desktop):
+                   test_language, test_desktop):
             try:
                 fn(page)
             except Exception as exc:                       # noqa: BLE001
@@ -502,9 +519,9 @@ def main():
               not errors, "; ".join(errors[:3]))
 
         # A second pass with reduced motion asked for: the hero must become a
-        # still photograph rather than a half-working animation.
+        # still object rather than a half-working animation.
         rm = browser.new_context(viewport=PHONE, device_scale_factor=2,
-                                 locale="fa-IR", reduced_motion="reduce")
+                                 locale="en-US", reduced_motion="reduce")
         rp = rm.new_page()
         try:
             rp.goto(BASE, wait_until="load")
@@ -514,9 +531,14 @@ def main():
                               ".getBoundingClientRect().height < innerHeight * 1.6"),
                   rp.evaluate("() => document.querySelector('.hero')"
                               ".getBoundingClientRect().height + ' vs ' + innerHeight"))
-            check("reduced motion removes the video",
-                  rp.evaluate("() => !document.querySelector('.hero__vid')"),
-                  "video still present")
+            check("reduced motion drops the canvas",
+                  rp.evaluate("() => !document.querySelector('canvas.hero__obj')"),
+                  "canvas still present")
+            check("reduced motion still shows the object",
+                  rp.evaluate("() => { const i = document.querySelector('.hero__posterimg');"
+                              "return !!i && !i.classList.contains('is-gone')"
+                              " && i.getBoundingClientRect().width > 150; }"),
+                  "poster hidden")
             check("reduced motion still shows the caption",
                   rp.evaluate("() => +document.querySelector('.hero__cap')"
                               ".style.opacity === 1"), "caption hidden")

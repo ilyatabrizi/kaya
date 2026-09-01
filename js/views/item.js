@@ -2,7 +2,7 @@ import { el, money, haptic } from '../util.js';
 import { icon } from '../icons.js';
 import { byslug, PRODUCTS } from '../data.js';
 import { SIZES, ADDONS, BRAND } from '../config.js';
-import { photo, productCard, footer, toast, sheet, note, brandEl } from '../ui.js';
+import { photo, productCard, footer, toast, sheet } from '../ui.js';
 import { currentRoute, go, back } from '../router.js';
 import { addToBag, isFav, toggleFav, state } from '../store.js';
 
@@ -26,7 +26,7 @@ export default function item() {
 
   /* ---------------------------------------------------------- the photo */
   v.append(el('button', {
-    class: 'item__back', type: 'button', 'aria-label': 'بازگشت',
+    class: 'item__back', type: 'button', 'aria-label': 'Back',
     html: icon('back'), onclick: () => back('/shop'),
   }));
 
@@ -38,7 +38,7 @@ export default function item() {
 
   /* ----------------------------------------------------------- the head */
   const head = el('header', { class: 'item__head' });
-  head.append(el('div', { class: 'eyebrow', text: p.lat }));
+  head.append(el('div', { class: 'eyebrow', text: p.meaning }));
   head.append(el('h1', { text: p.name }));
   head.append(el('div', { class: 'muted', style: { fontSize: '13.5px' }, text: p.short }));
   const priceEl = el('div', { class: 'item__price', text: money(price()) });
@@ -46,7 +46,7 @@ export default function item() {
   if (!inStock) {
     head.append(el('div', {
       class: 'tiny', style: { color: '#B3261E', marginTop: '4px' },
-      text: 'این قطعه فعلاً موجود نیست — برای هماهنگی تماس بگیرید.',
+      text: 'Out of stock today — call the atelier to arrange it.',
     }));
   }
   head.append(el('p', { class: 'item__desc', text: p.desc }));
@@ -60,19 +60,19 @@ export default function item() {
       const on = toggleFav(p.slug);
       fav.setAttribute('aria-pressed', on ? 'true' : 'false');
       fav.querySelector('svg').style.fill = on ? 'currentColor' : 'none';
-      fav.lastChild.textContent = on ? 'نگه داشته شد' : 'نگه دار';
+      fav.lastChild.textContent = on ? 'Kept' : 'Keep';
       haptic();
     },
   }, el('span', { html: icon('heart'), style: { display: 'contents' } }),
-     el('span', { text: isFav(p.slug) ? 'نگه داشته شد' : 'نگه دار' }));
+     el('span', { text: isFav(p.slug) ? 'Kept' : 'Keep' }));
   if (isFav(p.slug)) fav.querySelector('svg').style.fill = 'currentColor';
   wrap.append(fav);
 
   /* ---------------------------------------------------------- the sizes */
   if (p.sizes) {
     const sect = el('div', { class: 'panel mt-l' },
-      el('div', { class: 'panel__t', text: 'اندازه' }),
-      el('div', { class: 'panel__s', text: 'همان ترکیب، با تعداد شاخه متفاوت.' }),
+      el('div', { class: 'panel__t', text: 'Size' }),
+      el('div', { class: 'panel__s', text: 'The same mix, at a different count of stems.' }),
     );
     const opts = el('div', { class: 'opts' });
     SIZES.forEach((s) => {
@@ -101,8 +101,8 @@ export default function item() {
 
   /* --------------------------------------------------------- the addons */
   const addSect = el('div', { class: 'panel' },
-    el('div', { class: 'panel__t', text: 'همراه سفارش' }),
-    el('div', { class: 'panel__s', text: 'اختیاری — هر کدام را خواستید انتخاب کنید.' }),
+    el('div', { class: 'panel__t', text: 'With your order' }),
+    el('div', { class: 'panel__s', text: 'Optional — take any of them.' }),
   );
   const addRows = el('div', { class: 'rows' });
   ADDONS.forEach((a) => {
@@ -123,7 +123,7 @@ export default function item() {
       el('span', { style: { textAlign: 'start' } },
         el('span', { class: 'sw__t', style: { display: 'block' }, text: a.name }),
         el('span', { class: 'sw__s', style: { display: 'block' },
-          text: a.price ? `${a.sub} · ${money(a.price)}` : `${a.sub} · رایگان` }),
+          text: a.price ? `${a.sub} · ${money(a.price)}` : `${a.sub} · free` }),
       ),
       box,
     );
@@ -139,17 +139,17 @@ export default function item() {
       const box = el('div', {});
       box.append(el('h2', {
         id: 'sheet-title', style: { fontSize: '18px', fontWeight: '600', marginBottom: '4px' },
-        text: 'متن کارت',
+        text: 'The card',
       }));
       box.append(el('p', { class: 'muted tiny', style: { marginBottom: '16px' },
-        text: 'با خط خوش روی کارت کایا نوشته می‌شود. اسم فرستنده را هم بنویسید.' }));
+        text: 'Written in a fine hand on a KAYA card. Sign it, or leave it unsigned.' }));
       const ta = el('textarea', {
-        class: 'inp', maxlength: '240', placeholder: 'مثلاً: تولدت مبارک، همیشه شاد باشی — سارا',
+        class: 'inp', maxlength: '240', placeholder: 'e.g. Happy birthday — with love, Sara',
       });
       ta.value = cardText;
       box.append(ta);
       box.append(el('button', {
-        class: 'btn btn--full mt', type: 'button', text: 'ثبت متن',
+        class: 'btn btn--full mt', type: 'button', text: 'Save the message',
         onclick: () => { cardText = ta.value.trim(); refresh(); close(); },
       }));
       return box;
@@ -159,7 +159,7 @@ export default function item() {
 
   /* ----------------------------------------------------------- the facts */
   const facts = el('div', { class: 'panel mt' },
-    el('div', { class: 'panel__t', text: 'ترکیب' }),
+    el('div', { class: 'panel__t', text: 'Composition' }),
   );
   const list = el('div', { class: 'rows' });
   p.stems.forEach((s) => list.append(el('div', { class: 'row' },
@@ -170,7 +170,7 @@ export default function item() {
   facts.append(list);
   facts.append(el('hr', { class: 'hr', style: { margin: '14px 0' } }));
   facts.append(el('dl', { class: 'kv' },
-    el('dt', { text: 'اندازه' }), el('dd', { text: p.dims })));
+    el('dt', { text: 'Size' }), el('dd', { text: p.dims })));
   facts.append(el('div', { class: 'note mt' },
     el('span', { html: icon('leaf'), style: { display: 'contents' } }),
     el('span', { text: p.care })));
@@ -181,14 +181,14 @@ export default function item() {
       el('div', { class: 'row' },
         el('div', { class: 'row__ic', html: icon('clock') }),
         el('div', { class: 'row__b' },
-          el('div', { class: 'row__t', text: 'زمان آماده‌سازی' }),
+          el('div', { class: 'row__t', text: 'Lead time' }),
           el('div', { class: 'row__s', style: { whiteSpace: 'normal' }, text: p.lead })),
       ),
       el('a', { class: 'row row--btn', href: 'tel:' + BRAND.phones[0] },
         el('div', { class: 'row__ic', html: icon('phone') }),
         el('div', { class: 'row__b' },
-          el('div', { class: 'row__t', text: 'سؤالی دارید؟' }),
-          el('div', { class: 'row__s', text: 'با آتلیه تماس بگیرید' })),
+          el('div', { class: 'row__t', text: 'Questions?' }),
+          el('div', { class: 'row__s', text: 'Call the atelier' })),
         el('div', { class: 'row__e', html: icon('chev') }),
       ),
     ),
@@ -198,8 +198,9 @@ export default function item() {
   const others = PRODUCTS.filter((x) => x.slug !== p.slug).slice(0, 4);
   if (others.length) {
     wrap.append(el('div', { class: 'sect' },
-      el('h2', { style: { fontSize: '18px', fontWeight: '600', marginBottom: '14px' },
-        text: 'قطعه‌های دیگر' }),
+      el('h2', { class: 'display',
+        style: { fontSize: '20px', fontWeight: '600', marginBottom: '14px' },
+        text: 'Other pieces' }),
       el('div', { class: 'rail' }, ...others.map((o) => productCard(o, {
         sizes: '(min-width:1000px) 240px, 42vw' }))),
     ));
@@ -219,19 +220,19 @@ export default function item() {
         price: price(),
       });
       haptic(12);
-      toast(`${p.name} به سبد اضافه شد`);
+      toast(`${p.name} added to the bag`);
     },
-  }, el('span', { html: icon('bag'), style: { display: 'contents' } }), 'افزودن به سبد');
+  }, el('span', { html: icon('bag'), style: { display: 'contents' } }), 'Add to bag');
 
   if (!inStock) {
     cta.disabled = true;
-    cta.lastChild.textContent = 'موجود نیست';
+    cta.lastChild.textContent = 'Out of stock';
   }
 
   const dock = el('div', { class: 'dock' },
     el('div', { class: 'dock__in' },
       el('div', { class: 'dock__price' },
-        el('span', { text: p.sizes ? `اندازه ${SIZES.find((s) => s.id === size).name}` : 'قیمت' }),
+        el('span', { text: p.sizes ? SIZES.find((s) => s.id === size).name : 'Price' }),
         dockPrice),
       cta,
     ),
@@ -243,11 +244,11 @@ export default function item() {
     dockPrice.textContent = money(price());
     if (p.sizes) {
       dock.querySelector('.dock__price span').textContent =
-        `اندازه ${SIZES.find((s) => s.id === size).name}`;
+        SIZES.find((s) => s.id === size).name;
     }
     cardNote.textContent = addons.has('card') && cardText
-      ? `متن کارت: «${cardText}»`
-      : (addons.has('card') ? 'متن کارت هنوز نوشته نشده — روی «کارت دست‌نویس» بزنید.' : '');
+      ? `Card: “${cardText}”`
+      : (addons.has('card') ? 'The card has no message yet — tap “Handwritten card”.' : '');
   }
   refresh();
 

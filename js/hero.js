@@ -1,39 +1,35 @@
-// The scroll-scrubbed hero.
+// The hero: the arrangement itself, floating on the page.
 //
-// A portrait window hung on a white wall. Scrolling drives the video's
-// currentTime rather than the page: the camera pushes into the arrangement,
-// match-cuts into the petals, and drifts back out until the KAYA ribbon lands
-// on the last frame. At the same time the window grows out of its frame and
-// takes the whole viewport, and the wordmark hands itself off to the top bar.
+// Not a video. The Higgsfield footage was matted frame by frame, so what ships
+// is a transparent cutout sequence — the flowers and the KAYA urn with no
+// background at all, drawn to a canvas over the white page. Scroll drives it:
 //
-// Three things make the seek survive a phone:
+//   1. The object hangs in front of the giant wordmark, breathing slightly.
+//   2. Scrolling turns it — the frames are a real camera arc, so the parallax
+//      is true 3D, not a CSS trick — while the wordmark lifts away.
+//   3. Past the manifest's `safe` frame the blooms would clip the frame edge,
+//      which is exactly when the page dives INTO the object: scale climbs
+//      until the visible window is inside the flowers, and the late frames —
+//      natively closer — carry the descent into petal detail.
+//   4. The caption lands on the way out.
 //
-//   * The file is encoded for it — keyframe every 8 frames, no B-frames, so a
-//     seek decodes at most seven frames to land exactly where it was asked.
-//   * Seeks are issued at most one at a time. Setting currentTime while a seek
-//     is in flight queues work the decoder cannot drop, which is what makes
-//     naive scrub implementations fall apart under a fast flick.
-//   * The target is chased, not jumped to. The scroll position sets a target
-//     time; a rAF loop eases the video toward it. That smooths the 16fps grid
-//     into something continuous and hides any seek that arrives late.
-//
-// If the video cannot play at all — a locked-down browser, Data Saver, a
-// decode failure — the poster stays up and every other part of the animation
-// still runs. The hero degrades to a still photograph, which is a perfectly
-// good hero.
+// Frames load progressively, coarsest first: the ends, then midpoints,
+// subdividing until the whole sequence is in. The scrub is usable within a few
+// hundred KB; every later arrival only refines it. If nothing ever loads, the
+// poster stands and the page still works.
 
-import { el, clamp, range, easeOut, lerp, reduceMotion } from './util.js';
+import { el, clamp, range, easeOut, easeInOut, lerp, reduceMotion } from './util.js';
 import { HERO } from './hero-manifest.js';
 import { brandEl } from './ui.js';
-import { icon } from './icons.js';
 
-const SCROLL_VH = 3.2;          // how much scroll the whole scrub takes
+const SCROLL_VH = 3.0;          // how much scroll the whole move takes
+const ZOOM_MAX = 2.45;          // on top of the footage's own push-in
 
 // Run fn once, on whichever of the next animation frame or the next timer
 // arrives first. rAF alone is not enough: a hidden tab never fires one.
 function once(fn) {
   let done = false;
-  const run = () => { if (done) return; done = true; fn({}); };
+  const run = () => { if (done) return; done = true; fn(); };
   requestAnimationFrame(run);
   setTimeout(run, 60);
 }
@@ -42,268 +38,241 @@ export function heroSection() {
   const sect = el('section', { class: 'hero', style: { height: `${SCROLL_VH * 100}svh` } });
   const stage = el('div', { class: 'hero__stage' });
 
-  const win = el('div', { class: 'hero__win' });
-  const poster = el('img', {
-    class: 'hero__poster', src: HERO.poster, alt: 'گل‌آرایی کایا',
-    width: HERO.w, height: HERO.h, fetchpriority: 'high', decoding: 'async',
-  });
-  const vid = el('video', {
-    class: 'hero__vid', src: HERO.src, muted: true, playsinline: true,
-    preload: 'auto', tabindex: '-1', 'aria-hidden': 'true',
-  });
-  vid.muted = true;                 // the attribute alone is not enough on iOS
-  vid.defaultMuted = true;
-  vid.playsInline = true;
-  win.append(poster, vid);
-
   const word = brandEl('word', 'hero__word');
   word.setAttribute('aria-hidden', 'true');
 
-  const cap = el('div', { class: 'hero__cap' },
-    el('h1', { text: 'گل، همان‌طور که باید باشد' }),
-    el('p', { text: 'آتلیه گل‌آرایی کایا — تبریز، ولیعصر' }),
-  );
+  const objBox = el('div', { class: 'hero__objbox' });
+  const poster = el('img', {
+    class: 'hero__posterimg', src: HERO.poster, alt: 'A KAYA arrangement',
+    width: HERO.w, height: HERO.h, fetchpriority: 'high', decoding: 'async',
+  });
+  const canvas = el('canvas', { class: 'hero__obj', 'aria-hidden': 'true' });
+  const shadow = el('div', { class: 'hero__shadow' });
+  objBox.append(shadow, poster, canvas);
 
-  // No label. A word here would have to be either a Latin loan or a verb that
-  // means the wrong thing in Persian; the line says it without either.
+  const cap = el('div', { class: 'hero__cap' },
+    el('h1', { text: 'Flowers, as they should be.' }),
+    el('p', { text: 'KAYA flower atelier — Valiasr, Tabriz' }),
+  );
   const cue = el('div', { class: 'hero__cue' }, el('i', {}));
 
-  // Source order is wordmark, window, caption: the still (reduced-motion)
-  // hero renders them in flow in that order, and the animated one positions
-  // all three absolutely, so the order costs nothing there.
-  stage.append(word, win, cap, cue);
+  stage.append(word, objBox, cap, cue);
   sect.append(stage);
+  sect.prepend(el('h1', { class: 'sr', text: 'KAYA — flower atelier, Tabriz' }));
 
-  // h1 for the document outline; the visible one is inside .hero__cap.
-  sect.prepend(el('h1', { class: 'sr', text: 'کایا — آتلیه گل‌آرایی، تبریز' }));
-
-  // Set up on the next frame, so the section is in the document and can be
-  // measured — but not *only* on the next frame: a background or hidden tab
-  // freezes rAF indefinitely, and the hero would sit at zero size until the
-  // tab was looked at. A timer runs the same setup if rAF has not.
-  once((n) => drive({ ...n, sect, stage, win, poster, vid, word, cap, cue }));
+  once(() => drive({ sect, stage, word, objBox, poster, canvas, shadow, cap, cue }));
   return sect;
 }
 
-function drive(nodes) {
-  const { sect, win, poster, vid, word, cap, cue } = nodes;
+function drive(n) {
+  const { sect, stage, word, objBox, poster, canvas, shadow, cap, cue } = n;
   const still = reduceMotion();
+  const ratio = HERO.w / HERO.h;
+  const stageH = () => stage.getBoundingClientRect().height || window.innerHeight;
 
-  /* --------------------------------------------------------- the window */
-  // Framed size: a portrait print, comfortably inside the viewport. Full size:
-  // the viewport itself, cropped to cover. Everything in between is a lerp.
-  let framed = { w: 0, h: 0 }, full = { w: 0, h: 0 }, ratio = HERO.w / HERO.h;
-
+  /* -------------------------------------------------------------- sizing */
   function measure() {
     const vw = window.innerWidth;
-    const vh = stageHeight();
-    // Leave room for the wordmark above and the caption below.
-    const maxH = vh - (vw < 640 ? 268 : 250);
-    const maxW = vw < 640 ? vw * 0.72 : Math.min(vw * 0.34, 430);
-    let h = Math.min(maxH, maxW / ratio);
-    let w = h * ratio;
-    if (w > maxW) { w = maxW; h = w / ratio; }
-    framed = { w, h };
-    // Cover the viewport at the end.
-    const coverH = Math.max(vh, vw / ratio);
-    full = { w: Math.max(vw, vh * ratio), h: coverH };
+    const vh = stageH();
+    const maxH = vh * (vw < 640 ? 0.62 : 0.68);
+    const maxW = Math.min(vw * 0.88, 500);
+    const w = Math.min(maxW, maxH * ratio);
+    objBox.style.width = `${Math.round(w)}px`;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(w / ratio * dpr);
   }
-
-  const stageHeight = () => nodes.stage.getBoundingClientRect().height || window.innerHeight;
-
-  /* ------------------------------------------------------- reduced motion */
-  // A photograph, framed, with its caption under it. No sticky section to
-  // scroll through, no video, nothing that moves on its own. Scrubbing is
-  // direct manipulation rather than animation, but the growing window and the
-  // fading caption are not — and half a hero is worse than a still one.
-  //
-  // This has to happen before any of the playback wiring below: onReady()
-  // schedules the poster's fade-out, and a poster that fades out over a video
-  // that was then removed leaves an empty grey box.
   measure();
+
+  /* ------------------------------------------------------ reduced motion */
+  // A still photograph of the object, the name above it, the caption under
+  // it. No sticky section, no frames, nothing that moves on its own.
   if (still) {
     sect.style.height = 'auto';
-    nodes.stage.style.position = 'static';
-    nodes.stage.style.padding = '26px 0 40px';
-    win.style.width = `${Math.round(framed.w)}px`;
-    win.style.height = `${Math.round(framed.h)}px`;
-    win.style.borderRadius = '26px';
-    poster.classList.remove('is-gone');
-    cap.style.position = 'static';
-    cap.style.opacity = '1';
-    cap.style.marginTop = '26px';
-    cue.remove();
+    stage.style.position = 'static';
+    stage.style.height = 'auto';
+    stage.style.display = 'grid';
+    stage.style.justifyItems = 'center';
+    stage.style.padding = '34px 0 44px';
     word.style.position = 'static';
     word.style.transform = 'none';
-    word.style.margin = '0 auto 26px';
-    vid.remove();
+    word.style.margin = '0 auto 10px';
+    objBox.style.position = 'static';
+    objBox.style.transform = 'none';
+    canvas.remove();
+    cue.remove();
+    cap.style.position = 'static';
+    cap.style.opacity = '1';
+    cap.style.marginTop = '22px';
     return;
   }
 
-  /* ------------------------------------------------------------ playback */
-  let ready = false;
-  let seeking = false;
-  let target = 0;      // where the scroll says we should be
-  let shown = 0;       // where the video actually is
-  const dur = () => (Number.isFinite(vid.duration) && vid.duration > 0
-    ? vid.duration : HERO.duration);
+  /* -------------------------------------------------------------- frames */
+  const frames = new Array(HERO.count).fill(null);
+  let loaded = 0;
 
-  function onReady() {
-    if (ready) return;
-    ready = true;
-    vid.classList.add('is-on');
-    // Hold the poster one beat behind the video so the swap never flashes.
-    setTimeout(() => poster.classList.add('is-gone'), 220);
-    try { vid.currentTime = target; } catch { /* not seekable yet */ }
+  // Coarsest-first order: the ends, then midpoints, subdividing.
+  const order = [];
+  {
+    const seen = new Set();
+    const push = (i) => { if (!seen.has(i)) { seen.add(i); order.push(i); } };
+    push(0); push(HERO.count - 1);
+    const q = [[0, HERO.count - 1]];
+    while (q.length) {
+      const [a, b] = q.shift();
+      if (b - a < 2) continue;
+      const m = (a + b) >> 1;
+      push(m);
+      q.push([a, m], [m, b]);
+    }
   }
-  vid.addEventListener('loadeddata', onReady, { once: true });
-  vid.addEventListener('canplay', onReady, { once: true });
-  // A cached or local file can be ready before these listeners exist, and then
-  // neither event ever fires again — leaving the poster up over a video that
-  // has been decoded and waiting the whole time.
-  if (vid.readyState >= 2) onReady();
-  vid.addEventListener('seeked', () => { seeking = false; });
-  vid.addEventListener('error', () => { ready = false; });
 
-  // Safari will not fetch a preload=auto video until it has a reason. A muted
-  // play() then pause() gives it one, and doubles as the gesture unlock.
-  const nudge = () => {
-    const p = vid.play();
-    if (p && p.then) p.then(() => vid.pause()).catch(() => { /* fine */ });
-    else { try { vid.pause(); } catch { /* fine */ } };
+  let inflight = 0;
+  function pump() {
+    while (inflight < 5 && order.length) {
+      const i = order.shift();
+      inflight += 1;
+      const img = new Image();
+      img.decoding = 'async';
+      img.onload = () => {
+        frames[i] = img;
+        loaded += 1;
+        inflight -= 1;
+        if (loaded === 1) {
+          poster.classList.add('is-gone');
+          dirty = true;
+        }
+        pump(); wake();
+      };
+      img.onerror = () => { inflight -= 1; pump(); };
+      img.src = `${HERO.path}${String(i).padStart(3, '0')}${HERO.ext}`;
+    }
+  }
+  pump();
+
+  const nearest = (i) => {
+    if (frames[i]) return frames[i];
+    for (let d = 1; d < HERO.count; d += 1) {
+      if (frames[i - d]) return frames[i - d];
+      if (frames[i + d]) return frames[i + d];
+    }
+    return null;
   };
-  nudge();
-  ['pointerdown', 'touchstart', 'keydown'].forEach((ev) =>
-    addEventListener(ev, nudge, { once: true, passive: true }));
 
-  /* -------------------------------------------------------------- frame */
+  /* --------------------------------------------------------------- state */
   let progress = 0;
-  let raf = 0;
+  let target = 0;        // frame index the scroll asks for
+  let shown = 0;         // frame index on screen
   let dirty = true;
+  let running = false;
+  let onScreen = true;
+  const t0 = performance.now();
 
   function readScroll() {
     const box = sect.getBoundingClientRect();
-    const total = box.height - stageHeight();
+    const total = box.height - stageH();
     progress = total > 0 ? clamp(-box.top / total, 0, 1) : 0;
     dirty = true;
-    if (!raf) raf = requestAnimationFrame(paint);
+    wake();
   }
 
   function paint() {
-    raf = 0;
     const p = progress;
 
-    /* the window */
-    // Grows a little through the scrub, then takes the viewport at the end.
-    const grow = easeOut(range(p, 0, 0.30));
-    const open = easeOut(range(p, 0.74, 1));
-    const w = lerp(lerp(framed.w * 0.9, framed.w, grow), full.w, open);
-    const h = lerp(lerp(framed.h * 0.9, framed.h, grow), full.h, open);
-    win.style.width = `${Math.round(w)}px`;
-    win.style.height = `${Math.round(h)}px`;
-    win.style.borderRadius = `${Math.round(lerp(26, 0, open))}px`;
-    win.style.boxShadow = open > 0.9 ? 'none' : '';
-
-    /* the wordmark */
-    // Rides the top edge of the window, so it keeps its distance as the window
-    // grows, and lifts away once the scrub is under way — by the time the top
-    // bar slides in, the hero has already handed the name over.
-    const gap = window.innerWidth < 640 ? 30 : 38;
-    const top = (stageHeight() - h) / 2 - gap;
-    const wOut = easeOut(range(p, 0.02, 0.32));
-    word.style.bottom = `${Math.round(stageHeight() - top)}px`;
+    /* the wordmark — lifts away as the turn starts */
+    const wOut = easeOut(range(p, 0.03, 0.24));
     word.style.opacity = String(1 - wOut);
     word.style.transform =
-      `translateX(-50%) translateY(${lerp(0, -26, wOut)}px) scale(${lerp(1, 0.88, wOut)})`;
+      `translateX(-50%) translateY(${lerp(0, -30, wOut)}px) scale(${lerp(1, 0.92, wOut)})`;
 
-    /* the caption */
-    // Fades in on the reveal, not before — it is the payoff, not a label.
-    const cIn = easeOut(range(p, 0.62, 0.88));
-    const cOut = range(p, 0.97, 1);
-    cap.style.opacity = String(cIn * (1 - cOut));
-    cap.style.transform = `translateY(${lerp(16, 0, cIn)}px)`;
-    // White type once the photo is behind it, scrim and all.
-    const over = open > 0.35;
-    cap.classList.toggle('is-over', over);
-    cap.style.color = over ? '#fff' : '';
-    cap.style.textShadow = over ? '0 1px 20px rgba(11,11,12,.45)' : 'none';
+    /* the frames and the zoom. The zoom leads: past `safe` the frames carry
+       edge clipping and it must already be off-screen before they play — so
+       the scale ramps first, and the deep frames follow once the viewport is
+       inside the object's own bounds. */
+    const turn = easeInOut(range(p, 0.02, 0.58));
+    const zoom = easeInOut(range(p, 0.56, 0.90));
+    const dive = easeInOut(range(p, 0.70, 0.97));
+    target = turn * HERO.safe + dive * (HERO.count - 1 - HERO.safe);
 
-    /* the cue */
-    cue.style.opacity = String(1 - range(p, 0, 0.06));
+    /* the object — idle breath at the top, then the dive */
+    const bob = p < 0.05 && loaded > 0
+      ? Math.sin((performance.now() - t0) / 1300) * 5 * (1 - p / 0.05) : 0;
+    const scale = lerp(0.97, 1, easeOut(range(p, 0, 0.16))) * lerp(1, ZOOM_MAX, zoom);
+    const lift = lerp(0, stageH() * 0.09, zoom);   // aim the dive at the blooms
+    objBox.style.transform =
+      `translate(-50%,-50%) translateY(${(bob + lift).toFixed(1)}px) scale(${scale.toFixed(4)})`;
 
-    /* the scrub */
-    target = clamp(p, 0, 1) * dur() * 0.998;
-    if (ready) chase();
-    if (dirty) { dirty = false; }
+    /* the shadow — gone once the object stops being an object */
+    shadow.style.opacity = String(clamp(1 - zoom * 1.8, 0, 1) * 0.9);
+    shadow.style.transform = `translateX(-50%) scaleX(${(1 + bob / 90).toFixed(3)})`;
+
+    /* caption and cue — the caption only ever appears over the petals, so it
+       is white with its own scrim; reduced motion never takes this path and
+       keeps ink on white */
+    const cIn = easeOut(range(p, 0.80, 0.95));
+    cap.style.opacity = String(cIn);
+    cap.style.transform = `translateY(${lerp(14, 0, cIn)}px)`;
+    cap.classList.toggle('is-over', p > 0.6);
+    cue.style.opacity = String(1 - range(p, 0, 0.05));
+
+    canvas.dataset.scale = scale.toFixed(2);
   }
 
-  // Ease the video toward the target instead of snapping to it. One seek in
-  // flight at a time; anything closer than a frame is left alone.
-  let chasing = 0;
-  function chase() {
-    if (chasing) return;
-    const step = () => {
-      chasing = 0;
-      if (!ready) return;
-      const now = Number.isFinite(vid.currentTime) ? vid.currentTime : shown;
-      const d = target - now;
-      if (Math.abs(d) < 1 / HERO.fps / 2) return;
-      if (seeking) { chasing = requestAnimationFrame(step); return; }
-      // Big jumps land in one go; small ones glide.
-      shown = Math.abs(d) > 0.5 ? target : now + d * 0.34;
-      seeking = true;
-      try { vid.currentTime = clamp(shown, 0, dur()); }
-      catch { seeking = false; }
-      chasing = requestAnimationFrame(step);
-    };
-    chasing = requestAnimationFrame(step);
+  function draw() {
+    const i = Math.round(clamp(shown, 0, HERO.count - 1));
+    const img = nearest(i);
+    if (!img) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Dive frames do not always fill their own corners — the blooms have not
+    // reached them yet at that camera distance. The last whole-silhouette
+    // frame drawn underneath lends those corners its own texture, so the
+    // viewport never shows a bare wedge mid-dive.
+    if (i > HERO.safe) {
+      const under = nearest(HERO.safe);
+      if (under && under !== img) ctx.drawImage(under, 0, 0, canvas.width, canvas.height);
+    }
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    canvas.dataset.frame = String(Math.round(shown));
   }
 
-  /* ------------------------------------------------------------- wiring */
-  paint();
+  /* ---------------------------------------------------------------- loop */
+  // One rAF loop does everything: chases the target frame, paints the
+  // transforms, redraws the canvas when the frame changes, and idles itself
+  // to a stop when there is nothing left to move.
+  function tick() {
+    running = false;
+    if (!onScreen) return;
+
+    paint();
+
+    const d = target - shown;
+    if (Math.abs(d) > 0.35) {
+      shown += d * 0.30;
+      draw();
+    } else if (Math.round(target) !== Math.round(shown) || dirty) {
+      shown = target;
+      draw();
+    }
+    dirty = false;
+
+    // Keep breathing at the top; keep chasing while moving.
+    if (Math.abs(target - shown) > 0.35 || progress < 0.05) wake();
+  }
+  function wake() {
+    if (!running) { running = true; requestAnimationFrame(tick); }
+  }
+
   addEventListener('scroll', readScroll, { passive: true });
-  addEventListener('resize', () => { measure(); readScroll(); }, { passive: true });
-  if (window.visualViewport) {
-    visualViewport.addEventListener('resize', () => { measure(); readScroll(); });
-  }
-  readScroll();
-
-  // Stop paying for decode work while the hero is off screen.
+  addEventListener('resize', () => { measure(); dirty = true; readScroll(); },
+    { passive: true });
   if ('IntersectionObserver' in window) {
     new IntersectionObserver((es) => {
       for (const e of es) {
-        if (!e.isIntersecting && chasing) { cancelAnimationFrame(chasing); chasing = 0; }
+        onScreen = e.isIntersecting;
+        if (onScreen) { dirty = true; wake(); }
       }
-    }, { rootMargin: '200px' }).observe(sect);
+    }, { rootMargin: '120px' }).observe(sect);
   }
+  readScroll();
 }
-
-/* --------------------------------------------------------------- credits */
-// Used on the about page: the same footage, playing rather than scrubbed.
-export function heroLoop() {
-  const win = el('div', { class: 'hero__win', style: {
-    position: 'relative', width: '100%', aspectRatio: `${HERO.w}/${HERO.h}`,
-    borderRadius: '26px',
-  } });
-  const poster = el('img', { class: 'hero__poster', src: HERO.tail, alt: '' });
-  win.append(poster);
-  if (!reduceMotion()) {
-    const v = el('video', {
-      class: 'hero__vid is-on', src: HERO.src, muted: true, loop: true,
-      playsinline: true, preload: 'none', 'aria-hidden': 'true',
-    });
-    v.muted = true; v.playsInline = true;
-    win.append(v);
-    if ('IntersectionObserver' in window) {
-      new IntersectionObserver((es) => {
-        for (const e of es) {
-          if (e.isIntersecting) { v.preload = 'auto'; v.play().catch(() => {}); }
-          else v.pause();
-        }
-      }, { threshold: 0.25 }).observe(win);
-    }
-  }
-  return win;
-}
-
-export { icon };

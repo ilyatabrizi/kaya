@@ -1,57 +1,54 @@
-import { el, prettyPhone, telHref } from '../util.js';
+import { el, prettyPhone, telHref, toman } from '../util.js';
 import { icon } from '../icons.js';
 import { BRAND, DELIVERY } from '../config.js';
-import { pageHead, footer, note, brandEl, photo } from '../ui.js';
-import { heroLoop } from '../hero.js';
+import { pageHead, footer, brandEl, photo } from '../ui.js';
 
 export default function about() {
   const v = el('div', { class: 'view page' });
   const wrap = el('div', { class: 'wrap wrap--tight' });
 
-  wrap.append(pageHead('کایا',
-    'آتلیه گل‌آرایی در تبریز. باکس و گلدان، دسته‌گل، استند تبریک و سفارش اختصاصی.'));
+  wrap.append(pageHead('KAYA',
+    'A flower atelier in Tabriz. Boxes and vases, bouquets, congratulation stands and bespoke arrangements.'));
 
   wrap.append(el('div', {
     style: { borderRadius: '26px', overflow: 'hidden', marginBottom: '24px' },
-  }, heroLoop()));
+  }, photo('aftab', { alt: 'A KAYA arrangement in the ceramic urn', sizes: '(min-width:760px) 720px, 100vw' })));
 
   wrap.append(el('p', {
     style: { fontSize: '15px', lineHeight: '2', color: 'var(--ink-2)' },
-    text: 'کایا با یک قاعده ساده کار می‌کند: آنچه در عکس می‌بینید، همان است که تحویل می‌گیرید. هر ترکیب همان روز و با گل تازه چیده می‌شود، و اگر گلی از ترکیب در بازار نباشد، قبل از آماده‌سازی به شما می‌گوییم و جایگزین را با هم انتخاب می‌کنیم.',
+    text: 'KAYA works to one rule: what you see in the photograph is what arrives. Every piece is arranged fresh on the day, and if a flower is not in the market that morning, we call before arranging and agree the substitute together.',
   }));
 
   wrap.append(el('div', { class: 'panel mt-l' },
-    el('div', { class: 'panel__t', text: 'آتلیه' }),
+    el('div', { class: 'panel__t', text: 'The atelier' }),
     el('div', { class: 'rows' },
-      row('pin', 'آدرس', BRAND.address),
+      row('pin', 'Address', BRAND.address),
       ...BRAND.hours.map((h) => row('clock', h.d, h.h)),
     ),
   ));
 
   wrap.append(el('div', { class: 'panel' },
-    el('div', { class: 'panel__t', text: 'تماس' }),
+    el('div', { class: 'panel__t', text: 'Contact' }),
     el('div', { class: 'rows' },
       ...BRAND.phones.map((p) => el('a', { class: 'row row--btn', href: telHref(p) },
         el('div', { class: 'row__ic', html: icon('phone') }),
         el('div', { class: 'row__b' },
-          el('div', { class: 'row__t', text: 'تماس تلفنی' }),
-          el('div', { class: 'row__s', dir: 'ltr', style: { textAlign: 'start' },
-            text: prettyPhone(p) })),
+          el('div', { class: 'row__t', text: 'Call' }),
+          el('div', { class: 'row__s', text: prettyPhone(p) })),
         el('div', { class: 'row__e', html: icon('chev') }))),
       el('a', {
         class: 'row row--btn', href: BRAND.instagramUrl, target: '_blank', rel: 'noopener',
       },
         el('div', { class: 'row__ic', html: icon('ig') }),
         el('div', { class: 'row__b' },
-          el('div', { class: 'row__t', text: 'اینستاگرام' }),
-          el('div', { class: 'row__s', dir: 'ltr', style: { textAlign: 'start' },
-            text: '@' + BRAND.instagram })),
+          el('div', { class: 'row__t', text: 'Instagram' }),
+          el('div', { class: 'row__s', text: '@' + BRAND.instagram })),
         el('div', { class: 'row__e', html: icon('chev') })),
     ),
   ));
 
   wrap.append(el('div', { class: 'panel' },
-    el('div', { class: 'panel__t', text: 'ارسال' }),
+    el('div', { class: 'panel__t', text: 'Delivery' }),
     el('div', { class: 'rows' },
       ...DELIVERY.zones.map((z) => el('div', { class: 'row' },
         el('div', { class: 'row__ic', html: icon(z.id === 'pickup' ? 'pin' : 'truck') }),
@@ -59,33 +56,32 @@ export default function about() {
           el('div', { class: 'row__t', text: z.name }),
           el('div', { class: 'row__s', style: { whiteSpace: 'normal' },
             text: `${z.sub} · ${z.eta}` })),
-        el('div', { class: 'row__e',
-          text: z.fee ? prettyMoney(z.fee) : 'رایگان' }),
+        el('div', { class: 'row__e', text: z.fee ? toman(z.fee) : 'free' }),
       )),
     ),
     el('div', { class: 'note mt' },
       el('span', { html: icon('truck'), style: { display: 'contents' } }),
-      el('span', { text: `ارسال سفارش‌های بالای ${prettyMoney(DELIVERY.freeOver)} تومان در تبریز رایگان است.` })),
+      el('span', { text: `Delivery is free across Tabriz on orders over ${toman(DELIVERY.freeOver)} Toman.` })),
   ));
 
   wrap.append(el('div', { class: 'panel' },
-    el('div', { class: 'panel__t', text: 'پرسش‌های پرتکرار' }),
-    faq('چقدر طول می‌کشد تا برسد؟',
-      'در مرکز تبریز معمولاً کمتر از دو ساعت و در سایر مناطق دو تا چهار ساعت. برای قطعه‌های بزرگ مثل «هزار رز» یک روز قبل هماهنگ کنید.'),
-    faq('می‌توانم زمان مشخصی برای تحویل بدهم؟',
-      'بله. در مرحله تحویل، تاریخ و یکی از چهار بازه زمانی را انتخاب می‌کنید. قبل از حرکت پیک با گیرنده تماس گرفته می‌شود.'),
-    faq('اگر گیرنده خانه نباشد چه می‌شود؟',
-      'گل را برنمی‌گردانیم و بدون هماهنگی هم پشت در نمی‌گذاریم. پیک تماس می‌گیرد و اگر لازم شد، همان روز دوباره می‌رود.'),
-    faq('پرداخت چطور است؟',
-      'کارت به کارت، لینک پرداخت، یا هنگام تحویل. هیچ اطلاعات کارتی در سایت وارد نمی‌شود.'),
-    faq('می‌شود ترکیب دلخواه خودم را سفارش بدهم؟',
-      'بله. صفحه «سفارش اختصاصی» یک فرم شش قدمی است؛ بعد از ثبت، کایا تماس می‌گیرد و قیمت نهایی را می‌گوید.'),
+    el('div', { class: 'panel__t', text: 'Common questions' }),
+    faq('How fast does it arrive?',
+      'Usually under two hours in central Tabriz and two to four elsewhere in the city. For the largest pieces, like Hezar, order a day ahead.'),
+    faq('Can I choose a delivery time?',
+      'Yes. At checkout you pick a date and one of four time windows, and we call the recipient before the courier moves.'),
+    faq('What if the recipient is not home?',
+      'Flowers are never left at a door unagreed, and never returned. The courier calls, and if needed comes back the same day.'),
+    faq('How do I pay?',
+      'Card to card, a payment link, or on delivery. No card details are ever entered on this site.'),
+    faq('Can I order my own arrangement?',
+      'Yes — the Bespoke page is a six-step brief. KAYA reads it, calls you with a final price, and arranges only after you agree.'),
   ));
 
   wrap.append(el('div', { class: 'center', style: { padding: '30px 0 6px' } },
     brandEl('word', ''),
     el('p', { class: 'tiny muted', style: { marginTop: '14px' },
-      text: `${BRAND.city}، ${BRAND.area}` }),
+      text: `${BRAND.area}, ${BRAND.city}` }),
   ));
   wrap.lastChild.firstChild.style.width = '104px';
   wrap.lastChild.firstChild.style.margin = '0 auto';
@@ -127,5 +123,3 @@ function faq(q, a) {
   );
   return el('div', { style: { borderBottom: '1px solid var(--line-2)' } }, head, body);
 }
-
-const prettyMoney = (n) => Math.round(n).toLocaleString('en-US');

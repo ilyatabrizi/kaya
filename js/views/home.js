@@ -1,10 +1,9 @@
-import { el, money } from '../util.js';
+import { el } from '../util.js';
 import { icon } from '../icons.js';
-import { PRODUCTS, CATS } from '../data.js';
+import { PRODUCTS } from '../data.js';
 import { BRAND, DELIVERY } from '../config.js';
 import { photo, productCard, sectionHead, footer, brandEl } from '../ui.js';
 import { heroSection } from '../hero.js';
-import { state } from '../store.js';
 
 export default function home() {
   const v = el('div', { class: 'view' });
@@ -14,11 +13,11 @@ export default function home() {
   /* ------------------------------------------------------- the shortcuts */
   const quick = el('section', { class: 'sect sect--tight' },
     el('div', { class: 'wrap' },
-      el('div', { class: 'rail', style: { gridAutoColumns: 'minmax(132px,38vw)' } },
-        tile('flower', 'گل‌ها', 'هفت قطعه آماده', '#/shop'),
-        tile('spark', 'سفارش اختصاصی', 'از صفر، با شما', '#/custom'),
-        tile('ribbon', 'استند تبریک', 'افتتاحیه و تبریک', '#/shop?c=stand'),
-        tile('truck', 'ارسال در تبریز', 'کمتر از ۲ ساعت', '#/about'),
+      el('div', { class: 'rail', style: { gridAutoColumns: 'minmax(150px,40vw)' } },
+        tile('flower', 'Shop', 'seven pieces, ready today', '#/shop'),
+        tile('spark', 'Bespoke', 'from scratch, with you', '#/custom'),
+        tile('ribbon', 'Stands', 'openings & congratulations', '#/shop?c=stand'),
+        tile('truck', 'Delivery', 'across Tabriz, same day', '#/about'),
       ),
     ),
   );
@@ -28,17 +27,15 @@ export default function home() {
   const shelf = el('section', { class: 'sect' });
   const wrap = el('div', { class: 'wrap' });
   wrap.append(sectionHead(
-    'قطعه‌های کایا',
-    'هر ترکیب همان روز چیده می‌شود. آنچه در عکس می‌بینید همان چیزی است که تحویل می‌گیرید.',
-    { href: '#/shop', text: 'همه' },
+    'The pieces',
+    'Arranged fresh the same day. What you see in the photograph is what arrives.',
+    { href: '#/shop', text: 'All' },
   ));
 
   const grid = el('div', { class: 'grid' });
   // One landscape photograph among seven portraits. It spans the full row, so
-  // it has to sit at a row boundary — anywhere else it pushes the cards before
-  // it into a short row and leaves a hole, and the boundary is at a different
-  // index for each of the 2-, 3- and 4-column layouts. First is the only
-  // index that is a boundary in all three.
+  // it has to sit at a row boundary — and first is the only index that is a
+  // boundary in the 2-, 3- and 4-column layouts alike.
   const wide = PRODUCTS.find((p) => p.slug === 'nilgoon');
   if (wide) grid.append(productCard(wide, { wide: true }));
   PRODUCTS.filter((p) => p !== wide).forEach((p) => grid.append(productCard(p)));
@@ -54,21 +51,22 @@ export default function home() {
           el('div', { style: { padding: '26px 22px 24px' } },
             el('div', { class: 'eyebrow', text: 'Bespoke' }),
             el('h2', {
-              text: 'گلی که فقط برای شما بسته می‌شود',
-              style: { fontSize: 'clamp(21px,4.6vw,27px)', fontWeight: '600',
-                       letterSpacing: '-.02em', margin: '10px 0 9px' },
+              class: 'display',
+              text: 'Made only for you',
+              style: { fontSize: 'clamp(22px,4.8vw,29px)', fontWeight: '600',
+                       letterSpacing: '-.01em', margin: '10px 0 9px' },
             }),
             el('p', {
               class: 'muted',
-              style: { fontSize: '14px', lineHeight: '1.9', maxWidth: '40ch' },
-              text: 'مناسبت، فرم، پالت رنگ، گل‌های اصلی و بودجه را انتخاب کنید. کایا ترکیب را می‌چیند و قبل از آماده‌سازی، قیمت نهایی را با شما هماهنگ می‌کند.',
+              style: { fontSize: '14px', lineHeight: '1.9', maxWidth: '42ch' },
+              text: 'Choose the occasion, the form, the palette, the flowers and the budget. KAYA arranges the piece and confirms the final price with you before anything is made.',
             }),
             el('a', { class: 'btn mt', href: '#/custom' },
-              'شروع سفارش اختصاصی',
+              'Start a bespoke order',
               el('span', { html: icon('chev'), style: { display: 'contents' } })),
           ),
           el('div', { class: 'custom-split__ph' },
-            photo('arghavan', { alt: 'ترکیب بنفش کایا', sizes: '(min-width:760px) 420px, 100vw' })),
+            photo('arghavan', { alt: 'A purple KAYA arrangement', sizes: '(min-width:760px) 420px, 100vw' })),
         ),
       ),
     ),
@@ -80,14 +78,14 @@ export default function home() {
     el('div', { class: 'wrap' },
       el('div', { class: 'panel' },
         el('div', { class: 'rows' },
-          promise('truck', 'ارسال در تبریز',
-            `مرکز شهر ${DELIVERY.zones[0].eta} · سایر مناطق ${DELIVERY.zones[1].eta}`),
-          promise('leaf', 'گل تازه، هر روز صبح',
-            'هیچ ترکیبی از روز قبل نمی‌ماند. اگر گلی نباشد، جایگزین را قبل از آماده‌سازی می‌گوییم.'),
-          promise('note', 'کارت دست‌نویس',
-            'متن شما با خط خوش روی کارت کایا نوشته می‌شود — بدون هزینه.'),
-          promise('phone', 'هماهنگی قبل از تحویل',
-            'قبل از حرکت پیک، با گیرنده تماس می‌گیریم تا گل پشت در نماند.'),
+          promise('truck', 'Delivery across Tabriz',
+            `Central Tabriz ${DELIVERY.zones[0].eta} · elsewhere ${DELIVERY.zones[1].eta}`),
+          promise('leaf', 'Fresh flowers, every morning',
+            'No piece is held over from yesterday. If a flower is unavailable, we call before arranging and agree the substitute.'),
+          promise('note', 'A handwritten card',
+            'Your message, written in a fine hand on a KAYA card — no charge.'),
+          promise('phone', 'A call before the courier moves',
+            'We phone the recipient first, so flowers never wait at a door.'),
         ),
       ),
     ),
@@ -101,21 +99,21 @@ export default function home() {
         brandEl('word', 'visit__word'),
         el('p', {
           class: 'muted',
-          style: { fontSize: '13.5px', margin: '16px auto 0', maxWidth: '34ch' },
-          text: `${BRAND.address}. برای دیدن قطعه‌ها و مشورت، بدون وقت قبلی سر بزنید.`,
+          style: { fontSize: '13.5px', margin: '16px auto 0', maxWidth: '38ch' },
+          text: `${BRAND.address}. Come in to see the pieces or talk a brief through — no appointment needed.`,
         }),
         el('div', {
           style: { display: 'flex', gap: '9px', justifyContent: 'center',
                    flexWrap: 'wrap', marginTop: '18px' },
         },
           el('a', { class: 'btn btn--sm', href: 'tel:' + BRAND.phones[0] },
-            el('span', { html: icon('phone'), style: { display: 'contents' } }), 'تماس'),
+            el('span', { html: icon('phone'), style: { display: 'contents' } }), 'Call'),
           el('a', {
             class: 'btn btn--sm btn--ghost', href: BRAND.instagramUrl,
             target: '_blank', rel: 'noopener',
           }, el('span', { html: icon('ig'), style: { display: 'contents' } }),
-             el('span', { dir: 'ltr', class: 'lat', text: '@' + BRAND.instagram })),
-          el('a', { class: 'btn btn--sm btn--ghost', href: '#/about' }, 'ساعت کار و آدرس'),
+             el('span', { text: '@' + BRAND.instagram })),
+          el('a', { class: 'btn btn--sm btn--ghost', href: '#/about' }, 'Hours & address'),
         ),
       ),
     ),
@@ -127,9 +125,7 @@ export default function home() {
 }
 
 function tile(ic, title, sub, href) {
-  return el('a', {
-    class: 'qtile', href,
-  },
+  return el('a', { class: 'qtile', href },
     el('span', { class: 'qtile__ic', html: icon(ic) }),
     el('span', { class: 'qtile__t', text: title }),
     el('span', { class: 'qtile__s', text: sub }),

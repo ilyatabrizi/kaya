@@ -2,13 +2,13 @@ import { el } from '../util.js';
 import { icon } from '../icons.js';
 import { PRODUCTS, CATS } from '../data.js';
 import { productCard, pageHead, footer, empty } from '../ui.js';
-import { currentRoute, go } from '../router.js';
+import { currentRoute } from '../router.js';
 import { state } from '../store.js';
 
 const SORTS = [
-  { id: 'curated', name: 'چیدمان کایا' },
-  { id: 'low', name: 'ارزان‌ترین' },
-  { id: 'high', name: 'گران‌ترین' },
+  { id: 'curated', name: 'Curated' },
+  { id: 'low', name: 'Lowest first' },
+  { id: 'high', name: 'Highest first' },
 ];
 
 export default function shop() {
@@ -21,10 +21,10 @@ export default function shop() {
   const wrap = el('div', { class: 'wrap' });
 
   wrap.append(pageHead(
-    onlyFavs ? 'علاقه‌مندی‌ها' : 'گل‌ها',
+    onlyFavs ? 'Favourites' : 'The pieces',
     onlyFavs
-      ? 'قطعه‌هایی که نگه داشته‌اید.'
-      : 'هفت قطعه، هر کدام با ترکیب و اندازه مشخص. برای چیزی خارج از این فهرست، سفارش اختصاصی بدهید.',
+      ? 'The pieces you have kept.'
+      : 'Seven pieces, each with a fixed mix and size. For anything beyond this shelf, place a bespoke order.',
   ));
 
   /* --------------------------------------------------------- the filters */
@@ -40,7 +40,7 @@ export default function shop() {
     class: 'chip' + (onlyFavs ? ' is-on' : ''),
     type: 'button',
     onclick: () => { onlyFavs = !onlyFavs; sync(); },
-  }, el('span', { html: icon('heart'), style: { display: 'contents' } }), 'علاقه‌مندی'));
+  }, el('span', { html: icon('heart'), style: { display: 'contents' } }), 'Saved'));
   wrap.append(chips);
 
   const sortRow = el('div', {
@@ -51,7 +51,7 @@ export default function shop() {
   const sortSel = el('select', {
     class: 'inp',
     style: { width: 'auto', height: '38px', fontSize: '13px', marginInlineStart: 'auto' },
-    'aria-label': 'ترتیب',
+    'aria-label': 'Sort',
     onchange: (e) => { sort = e.target.value; sync(); },
   }, ...SORTS.map((s) => el('option', { value: s.id, text: s.name })));
   sortRow.append(count, sortSel);
@@ -72,18 +72,19 @@ export default function shop() {
     if (sort === 'low') list.sort((a, b) => a.price - b.price);
     if (sort === 'high') list.sort((a, b) => b.price - a.price);
 
-    count.textContent = list.length ? `${list.length} قطعه` : '';
+    count.textContent = list.length
+      ? `${list.length} piece${list.length === 1 ? '' : 's'}` : '';
     grid.replaceChildren();
 
     if (!list.length) {
       grid.append(el('div', { style: { gridColumn: '1/-1' } },
         onlyFavs
-          ? empty('heart', 'هنوز چیزی نگه نداشته‌اید',
-              'روی قلب گوشه هر قطعه بزنید تا اینجا جمع شود.',
-              el('a', { class: 'btn btn--sm mt', href: '#/shop', text: 'دیدن گل‌ها' }))
-          : empty('flower', 'در این دسته چیزی نیست',
-              'دسته دیگری را ببینید، یا سفارش اختصاصی بدهید.',
-              el('a', { class: 'btn btn--sm mt', href: '#/custom', text: 'سفارش اختصاصی' })),
+          ? empty('heart', 'Nothing saved yet',
+              'Tap the heart on any piece and it collects here.',
+              el('a', { class: 'btn btn--sm mt', href: '#/shop', text: 'See the pieces' }))
+          : empty('flower', 'Nothing in this category',
+              'Try another category, or place a bespoke order.',
+              el('a', { class: 'btn btn--sm mt', href: '#/custom', text: 'Bespoke order' })),
       ));
       return;
     }

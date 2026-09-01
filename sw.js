@@ -5,7 +5,7 @@
 // cached as they are used, because precaching 3MB of media on first visit is
 // exactly the thing that makes a phone on a Tabriz 4G connection give up.
 
-const VERSION = 'kaya-v1';
+const VERSION = 'kaya-v2';
 const SHELL = `${VERSION}-shell`;
 const MEDIA = `${VERSION}-media`;
 
@@ -30,10 +30,8 @@ const PRECACHE = [
   'js/views/home.js',
   'assets/brand/wordmark.svg',
   'assets/brand/mark.svg',
-  'assets/fonts/IRANYekanXFaNum-Regular.woff2',
-  'assets/fonts/IRANYekanXFaNum-Medium.woff2',
-  'assets/fonts/IRANYekanXFaNum-DemiBold.woff2',
-  'assets/fonts/IRANYekanXFaNum-Bold.woff2',
+  'assets/fonts/inter.woff2',
+  'assets/fonts/playfair.woff2',
   'assets/hero/poster.webp',
   'assets/icons/icon-192.png',
   'assets/icons/apple-touch-icon.png',

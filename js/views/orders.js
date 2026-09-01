@@ -1,9 +1,8 @@
-import { el, money, faDateTime, relative, prettyPhone } from '../util.js';
+import { el, money, dateTime, dateShort, relative, prettyPhone } from '../util.js';
 import { icon } from '../icons.js';
-import { DELIVERY, BRAND } from '../config.js';
-import { SIZES, ADDONS } from '../config.js';
-import { pageHead, footer, empty, note, photo, brandEl } from '../ui.js';
-import { currentRoute, go, back } from '../router.js';
+import { DELIVERY, BRAND, SIZES, ADDONS } from '../config.js';
+import { pageHead, footer, empty, note, photo } from '../ui.js';
+import { currentRoute, go } from '../router.js';
 import { state, STATUS } from '../store.js';
 
 const FLOW = ['new', 'prep', 'out', 'done'];
@@ -11,15 +10,15 @@ const FLOW = ['new', 'prep', 'out', 'done'];
 export function ordersList() {
   const v = el('div', { class: 'view page' });
   const wrap = el('div', { class: 'wrap wrap--tight' });
-  wrap.append(pageHead('سفارش‌های من', 'همه سفارش‌هایی که از این دستگاه ثبت شده.'));
+  wrap.append(pageHead('My orders', 'Every order placed from this device.'));
 
   const mine = state.orders.filter((o) => !o.demo || o.buyer?.phone === state.profile.phone);
   const list = mine.length ? mine : state.orders.filter((o) => !o.demo);
 
   if (!list.length) {
-    wrap.append(empty('note', 'هنوز سفارشی ندارید',
-      'اولین سفارشتان که ثبت شود، اینجا قابل پیگیری است.',
-      el('a', { class: 'btn btn--sm mt', href: '#/shop', text: 'دیدن گل‌ها' })));
+    wrap.append(empty('note', 'No orders yet',
+      'Your first order will be trackable here.',
+      el('a', { class: 'btn btn--sm mt', href: '#/shop', text: 'See the pieces' })));
   } else {
     const panel = el('div', { class: 'panel' });
     const rows = el('div', { class: 'rows' });
@@ -27,7 +26,7 @@ export function ordersList() {
       rows.append(el('a', { class: 'row row--btn', href: `#/order/${o.id}` },
         el('div', { class: 'row__ic', html: icon('box') }),
         el('div', { class: 'row__b' },
-          el('div', { class: 'row__t', text: o.items.map((i) => i.name).join('، ') }),
+          el('div', { class: 'row__t', text: o.items.map((i) => i.name).join(', ') }),
           el('div', { class: 'row__s',
             text: `${o.no} · ${relative(o.at)} · ${money(o.total)}` })),
         el('div', { class: 'row__e' },
@@ -63,20 +62,21 @@ export function orderDetail() {
                  display: 'grid', placeItems: 'center' },
         html: icon('check'),
       }),
-      el('h1', { style: { fontSize: '24px', fontWeight: '600', letterSpacing: '-.02em' },
-        text: 'سفارش شما ثبت شد' }),
+      el('h1', { class: 'display',
+        style: { fontSize: '26px', fontWeight: '600', letterSpacing: '-.01em' },
+        text: 'Order placed' }),
       el('p', { class: 'muted', style: { fontSize: '13.5px', marginTop: '7px' },
-        text: 'کایا تا دقایقی دیگر برای هماهنگی تماس می‌گیرد.' }),
+        text: 'KAYA will call you shortly to confirm.' }),
     ));
   } else {
-    wrap.append(pageHead(`سفارش ${o.no}`, faDateTime(o.at)));
+    wrap.append(pageHead(`Order ${o.no}`, dateTime(o.at)));
   }
 
   /* ------------------------------------------------------------ tracker */
   if (o.status !== 'cancel') {
     const at = FLOW.indexOf(o.status);
     const track = el('div', { class: 'panel' },
-      el('div', { class: 'panel__t', text: 'وضعیت' }),
+      el('div', { class: 'panel__t', text: 'Status' }),
       el('div', { class: 'steps', style: { marginTop: '12px', marginBottom: '12px' } },
         ...FLOW.map((s, i) => {
           const bar = el('i');
@@ -92,16 +92,16 @@ export function orderDetail() {
     );
     wrap.append(track);
   } else {
-    wrap.append(note('این سفارش لغو شده است.', 'info'));
+    wrap.append(note('This order was cancelled.', 'info'));
   }
 
   /* -------------------------------------------------------------- items */
   const items = el('div', { class: 'panel' },
-    el('div', { class: 'panel__t', text: 'اقلام' }));
+    el('div', { class: 'panel__t', text: 'Items' }));
   o.items.forEach((i) => {
     const meta = [];
-    if (i.size) meta.push(`اندازه ${SIZES.find((s) => s.id === i.size)?.name || i.size}`);
-    if (i.qty > 1) meta.push(`${i.qty} عدد`);
+    if (i.size) meta.push(SIZES.find((s) => s.id === i.size)?.name || i.size);
+    if (i.qty > 1) meta.push(`× ${i.qty}`);
     (i.addons || []).forEach((a) => {
       const ad = ADDONS.find((x) => x.id === a); if (ad) meta.push(ad.name);
     });
@@ -111,7 +111,7 @@ export function orderDetail() {
       el('div', { class: 'line__b' },
         el('div', { class: 'line__t', text: i.name }),
         meta.length ? el('div', { class: 'line__s', text: meta.join(' · ') }) : null,
-        i.note ? el('div', { class: 'line__s', text: `کارت: «${i.note}»` }) : null,
+        i.note ? el('div', { class: 'line__s', text: `Card: “${i.note}”` }) : null,
         el('div', { class: 'line__f' },
           el('span', {}), el('div', { class: 'line__p', text: money(i.price * i.qty) })),
       ),
@@ -123,23 +123,23 @@ export function orderDetail() {
   /* ----------------------------------------------------------- delivery */
   const zone = DELIVERY.zones.find((z) => z.id === o.delivery.zone);
   wrap.append(el('div', { class: 'panel' },
-    el('div', { class: 'panel__t', text: 'تحویل' }),
+    el('div', { class: 'panel__t', text: 'Delivery' }),
     el('div', { class: 'rows' },
-      infoRow('cal', 'زمان', `${faDateTime(o.delivery.date).split('·')[0].trim()} · ${o.delivery.slot}`),
-      infoRow('truck', 'روش', `${zone?.name || '—'}`),
-      infoRow('user', 'گیرنده', `${o.recipient.name} — ${prettyPhone(o.recipient.phone)}`),
-      infoRow('pin', 'آدرس', o.recipient.address),
+      infoRow('cal', 'When', `${dateShort(o.delivery.date)} · ${o.delivery.slot}`),
+      infoRow('truck', 'How', `${zone?.name || '—'}`),
+      infoRow('user', 'Recipient', `${o.recipient.name} — ${prettyPhone(o.recipient.phone)}`),
+      infoRow('pin', 'Address', o.recipient.address),
     ),
   ));
 
-  /* ------------------------------------------------------------ totals */
+  /* ------------------------------------------------------------- totals */
   wrap.append(el('div', { class: 'panel' },
     el('dl', {},
-      el('div', { class: 'kv' }, el('dt', { text: 'جمع اقلام' }),
+      el('div', { class: 'kv' }, el('dt', { text: 'Items' }),
         el('dd', { text: money(o.total - (o.delivery.fee || 0)) })),
-      el('div', { class: 'kv' }, el('dt', { text: 'کرایه ارسال' }),
-        el('dd', { text: o.delivery.fee ? money(o.delivery.fee) : 'رایگان' })),
-      el('div', { class: 'kv kv--total' }, el('dt', { text: 'جمع' }),
+      el('div', { class: 'kv' }, el('dt', { text: 'Delivery' }),
+        el('dd', { text: o.delivery.fee ? money(o.delivery.fee) : 'free' })),
+      el('div', { class: 'kv kv--total' }, el('dt', { text: 'Total' }),
         el('dd', { text: money(o.total) })),
     ),
   ));
@@ -149,27 +149,27 @@ export function orderDetail() {
       el('a', { class: 'row row--btn', href: 'tel:' + BRAND.phones[0] },
         el('div', { class: 'row__ic', html: icon('phone') }),
         el('div', { class: 'row__b' },
-          el('div', { class: 'row__t', text: 'تماس با آتلیه' }),
-          el('div', { class: 'row__s', dir: 'ltr', text: prettyPhone(BRAND.phones[0]) })),
+          el('div', { class: 'row__t', text: 'Call the atelier' }),
+          el('div', { class: 'row__s', text: prettyPhone(BRAND.phones[0]) })),
         el('div', { class: 'row__e', html: icon('chev') })),
       el('button', {
         class: 'row row--btn', type: 'button',
         onclick: async () => {
-          const text = `سفارش ${o.no} — کایا\n${o.items.map((i) => i.name).join('، ')}\n${money(o.total)}`;
-          if (navigator.share) { try { await navigator.share({ title: 'سفارش کایا', text }); } catch { /* cancelled */ } }
+          const text = `KAYA order ${o.no}\n${o.items.map((i) => i.name).join(', ')}\n${money(o.total)}`;
+          if (navigator.share) { try { await navigator.share({ title: 'KAYA order', text }); } catch { /* cancelled */ } }
           else { await navigator.clipboard?.writeText(text); }
         },
       },
         el('div', { class: 'row__ic', html: icon('share') }),
-        el('div', { class: 'row__b' }, el('div', { class: 'row__t', text: 'اشتراک‌گذاری سفارش' })),
+        el('div', { class: 'row__b' }, el('div', { class: 'row__t', text: 'Share the order' })),
         el('div', { class: 'row__e', html: icon('chev') })),
     ),
   ));
 
   wrap.append(el('div', { style: { display: 'flex', gap: '10px', marginTop: '18px' } },
-    el('a', { class: 'btn btn--ghost', href: '#/orders', text: 'سفارش‌های من',
+    el('a', { class: 'btn btn--ghost', href: '#/orders', text: 'My orders',
       style: { flex: '1' } }),
-    el('a', { class: 'btn', href: '#/shop', text: 'ادامه خرید', style: { flex: '1' } }),
+    el('a', { class: 'btn', href: '#/shop', text: 'Keep shopping', style: { flex: '1' } }),
   ));
 
   v.append(wrap, footer());
@@ -187,11 +187,11 @@ function infoRow(ic, t, s) {
 
 export function briefBlock(b) {
   const rows = [
-    ['مناسبت', b.occasion], ['فرم', b.form], ['پالت', b.palette],
-    ['گل‌ها', b.flowers], ['کاغذ', b.wrap],
-    ['بودجه', money(b.budget)],
-    b.ribbon ? ['ریبون', b.ribbon] : null,
-    b.notes ? ['توضیح', b.notes] : null,
+    ['Occasion', b.occasion], ['Form', b.form], ['Palette', b.palette],
+    ['Flowers', b.flowers], ['Paper', b.wrap],
+    ['Budget', money(b.budget)],
+    b.ribbon ? ['Ribbon', b.ribbon] : null,
+    b.notes ? ['Notes', b.notes] : null,
   ].filter(Boolean);
   return el('div', { class: 'note', style: { marginTop: '12px', display: 'block' } },
     el('div', { class: 'eyebrow', style: { marginBottom: '9px' }, text: 'Brief' }),

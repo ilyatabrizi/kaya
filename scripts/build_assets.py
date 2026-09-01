@@ -114,18 +114,20 @@ def render_svg(svg_path, out_path, size, bg, fg, pad=0.18, radius=None):
 
 def build_icons():
     ICONS.mkdir(parents=True, exist_ok=True)
-    mark = BRAND / "mark.svg"
     word = BRAND / "wordmark.svg"
 
-    # Maskable and Apple icons need their own ground — iOS composites the home
-    # screen icon on nothing and a transparent PNG comes out black.
+    # The icon is the complete wordmark — the client's call. It is wide
+    # (1000:226), so the pad is horizontal breathing room and the height
+    # follows. Every icon carries its own white ground: iOS composites the
+    # home-screen icon on nothing and a transparent PNG comes out black.
     for size in ICON_SIZES:
-        render_svg(mark, ICONS / f"icon-{size}.png", size, "#ffffff", "#0B0B0C", pad=0.26)
-    render_svg(mark, ICONS / "apple-touch-icon.png", 180, "#ffffff", "#0B0B0C", pad=0.24)
-    # Maskable: Android crops to a circle inscribed in 80% of the canvas.
-    render_svg(mark, ICONS / "maskable-512.png", 512, "#ffffff", "#0B0B0C", pad=0.34)
-    render_svg(mark, ICONS / "favicon-64.png", 64, "#ffffff", "#0B0B0C", pad=0.22)
-    print(f"  icons        {len(ICON_SIZES) + 3} files")
+        render_svg(word, ICONS / f"icon-{size}.png", size, "#ffffff", "#0B0B0C", pad=0.09)
+    render_svg(word, ICONS / "apple-touch-icon.png", 180, "#ffffff", "#0B0B0C", pad=0.10)
+    # Maskable: Android crops to a circle inscribed in 80% of the canvas, so
+    # the wordmark has to fit inside that circle's chord.
+    render_svg(word, ICONS / "maskable-512.png", 512, "#ffffff", "#0B0B0C", pad=0.22)
+    render_svg(word, ICONS / "favicon-64.png", 64, "#ffffff", "#0B0B0C", pad=0.06)
+    print(f"  icons        {len(ICON_SIZES) + 3} files (full wordmark)")
 
     # Splash / OG groundwork: the wordmark on white, wide.
     svg = word.read_text(encoding="utf-8").replace('fill="currentColor"', 'fill="#0B0B0C"')
@@ -135,7 +137,7 @@ def build_icons():
         'flex-direction:column;align-items:center;justify-content:center;gap:34px">'
         f'<div style="width:520px">{svg}</div>'
         '<div style="font:400 25px/1 -apple-system,Helvetica,Arial;letter-spacing:.42em;'
-        'color:#6C6C70;padding-left:.42em">TABRIZ &nbsp;·&nbsp; VALIASR</div>'
+        'color:#6C6C70;padding-left:.42em">FLOWER ATELIER &nbsp;·&nbsp; TABRIZ</div>'
         '</div></body></html>'
     )
     tmp = ROOT / "scripts" / "_og.html"

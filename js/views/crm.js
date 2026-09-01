@@ -7,12 +7,12 @@
 // out of.
 
 import {
-  el, money, relative, faDateTime, faShort, prettyPhone, haptic, telHref,
+  el, money, relative, dateTime, dateShort, prettyPhone, haptic, telHref,
 } from '../util.js';
 import { icon } from '../icons.js';
 import { BRAND, DELIVERY, SIZES, ADDONS } from '../config.js';
 import { PRODUCTS } from '../data.js';
-import { pageHead, toast, sheet, note, photo, brandEl, empty } from '../ui.js';
+import { toast, sheet, photo, brandEl, empty } from '../ui.js';
 import { go } from '../router.js';
 import {
   state, save, setStatus, STATUS, toggleStock, customers,
@@ -20,13 +20,13 @@ import {
 import { briefBlock } from './orders.js';
 
 const BOARD = [
-  { id: 'today', name: 'امروز' },
-  { id: 'new', name: 'جدید' },
-  { id: 'prep', name: 'آماده‌سازی' },
-  { id: 'out', name: 'در مسیر' },
-  { id: 'done', name: 'تحویل شده' },
-  { id: 'people', name: 'مشتری‌ها' },
-  { id: 'stock', name: 'موجودی' },
+  { id: 'today', name: 'Today' },
+  { id: 'new', name: 'New' },
+  { id: 'prep', name: 'Preparing' },
+  { id: 'out', name: 'On the way' },
+  { id: 'done', name: 'Delivered' },
+  { id: 'people', name: 'Customers' },
+  { id: 'stock', name: 'Stock' },
 ];
 
 export default function crm() {
@@ -42,8 +42,8 @@ export default function crm() {
     brandEl('word', ''),
     el('div', { style: { marginInlineStart: 'auto', display: 'flex', gap: '6px' } },
       el('button', {
-        class: 'iconbtn', type: 'button', 'aria-label': 'خروج', html: icon('lock'),
-        onclick: () => { state.crm.unlocked = false; save(); toast('خارج شدید'); go('/'); },
+        class: 'iconbtn', type: 'button', 'aria-label': 'Lock', html: icon('lock'),
+        onclick: () => { state.crm.unlocked = false; save(); toast('Locked'); go('/'); },
       }),
     ),
   ));
@@ -84,11 +84,11 @@ export default function crm() {
       .filter((o) => o.status === 'done')
       .reduce((n, o) => n + o.total, 0);
     stats.replaceChildren(
-      stat(String(open.length), 'سفارش باز', open.length ? 'نیازمند اقدام' : 'همه بسته'),
-      stat(String(dueToday.length), 'تحویل امروز',
+      stat(String(open.length), 'open orders', open.length ? 'need action' : 'all closed'),
+      stat(String(dueToday.length), 'due today',
         dueToday.length ? nextSlot(dueToday) : '—'),
-      stat(money(revenue).replace(' تومان', ''), 'فروش تحویل‌شده', 'تومان'),
-      stat(String(customers().length), 'مشتری', 'ثبت‌شده'),
+      stat(money(revenue).replace(' Toman', ''), 'delivered sales', 'Toman'),
+      stat(String(customers().length), 'customers', 'on record'),
     );
   }
 
@@ -110,8 +110,8 @@ export default function crm() {
     }
 
     if (!list.length) {
-      body.append(empty('box', 'چیزی اینجا نیست',
-        tab === 'today' ? 'امروز تحویلی ثبت نشده.' : 'این ستون خالی است.'));
+      body.append(empty('box', 'Nothing here',
+        tab === 'today' ? 'No deliveries booked for today.' : 'This column is empty.'));
       return;
     }
     list.forEach((o) => body.append(orderCard(o, paint)));
@@ -128,16 +128,16 @@ function orderCard(o, refresh) {
 
   card.append(el('div', { class: 'ord__top' },
     el('div', { style: { minWidth: '0' } },
-      el('div', { class: 'ord__id', dir: 'ltr', style: { textAlign: 'start' }, text: o.no }),
+      el('div', { class: 'ord__id', text: o.no }),
       el('div', { class: 'ord__who', text: o.recipient?.name || '—' }),
       el('div', { class: 'ord__meta',
-        text: `${o.items.map((i) => `${i.name}${i.qty > 1 ? ` ×${i.qty}` : ''}`).join('، ')} · ${money(o.total)}` }),
+        text: `${o.items.map((i) => `${i.name}${i.qty > 1 ? ` ×${i.qty}` : ''}`).join(', ')} · ${money(o.total)}` }),
     ),
     el('span', { class: 'ord__st', data: { s: o.status }, text: STATUS[o.status].name }),
   ));
 
   card.append(el('div', { class: 'ord__meta' },
-    `${faShort(o.delivery.date)} · ${o.delivery.slot} · ${zone?.name || '—'}`));
+    `${dateShort(o.delivery.date)} · ${o.delivery.slot} · ${zone?.name || '—'}`));
   card.append(el('div', { class: 'ord__meta', text: o.recipient?.address || '' }));
 
   const acts = el('div', { class: 'ord__acts' });
@@ -146,15 +146,15 @@ function orderCard(o, refresh) {
     acts.append(el('button', {
       class: 'chip', type: 'button',
       text: `→ ${STATUS[flow[o.status]].name}`,
-      onclick: () => { setStatus(o.id, flow[o.status]); haptic(); toast('وضعیت به‌روز شد'); refresh(); },
+      onclick: () => { setStatus(o.id, flow[o.status]); haptic(); toast('Status updated'); refresh(); },
     }));
   }
   acts.append(el('a', { class: 'chip', href: telHref(o.recipient?.phone || '') },
-    el('span', { html: icon('phone'), style: { display: 'contents' } }), 'گیرنده'));
+    el('span', { html: icon('phone'), style: { display: 'contents' } }), 'Recipient'));
   acts.append(el('a', { class: 'chip', href: telHref(o.buyer?.phone || '') },
-    el('span', { html: icon('user'), style: { display: 'contents' } }), 'سفارش‌دهنده'));
+    el('span', { html: icon('user'), style: { display: 'contents' } }), 'Buyer'));
   acts.append(el('button', {
-    class: 'chip', type: 'button', text: 'جزئیات',
+    class: 'chip', type: 'button', text: 'Details',
     onclick: () => detail(o, refresh),
   }));
   card.append(acts);
@@ -166,14 +166,14 @@ function detail(o, refresh) {
     const box = el('div', {});
     box.append(el('h2', { id: 'sheet-title',
       style: { fontSize: '18px', fontWeight: '600', marginBottom: '3px' },
-      text: `سفارش ${o.no}` }));
+      text: `Order ${o.no}` }));
     box.append(el('p', { class: 'muted tiny', style: { marginBottom: '16px' },
-      text: faDateTime(o.at) }));
+      text: dateTime(o.at) }));
 
     o.items.forEach((i) => {
       const meta = [];
-      if (i.size) meta.push(`اندازه ${SIZES.find((s) => s.id === i.size)?.name || i.size}`);
-      if (i.qty > 1) meta.push(`${i.qty} عدد`);
+      if (i.size) meta.push(SIZES.find((s) => s.id === i.size)?.name || i.size);
+      if (i.qty > 1) meta.push(`× ${i.qty}`);
       (i.addons || []).forEach((a) => {
         const ad = ADDONS.find((x) => x.id === a); if (ad) meta.push(ad.name);
       });
@@ -184,7 +184,7 @@ function detail(o, refresh) {
           el('div', { class: 'line__t', text: i.name }),
           meta.length ? el('div', { class: 'line__s', text: meta.join(' · ') }) : null,
           i.note ? el('div', { class: 'line__s',
-            style: { whiteSpace: 'normal' }, text: `کارت: «${i.note}»` }) : null,
+            style: { whiteSpace: 'normal' }, text: `Card: “${i.note}”` }) : null,
           el('div', { class: 'line__f' }, el('span'),
             el('div', { class: 'line__p', text: money(i.price * i.qty) })),
         )));
@@ -193,13 +193,13 @@ function detail(o, refresh) {
 
     box.append(el('hr', { class: 'hr' }));
     box.append(el('dl', {},
-      kv('سفارش‌دهنده', `${o.buyer?.name} — ${prettyPhone(o.buyer?.phone || '')}`),
-      kv('گیرنده', `${o.recipient?.name} — ${prettyPhone(o.recipient?.phone || '')}`),
-      kv('آدرس', o.recipient?.address || '—'),
-      kv('زمان', `${faShort(o.delivery.date)} · ${o.delivery.slot}`),
-      kv('پرداخت', { card: 'کارت به کارت', cash: 'هنگام تحویل', link: 'لینک پرداخت' }[o.pay] || '—'),
-      o.anon ? kv('فرستنده', 'ناشناس') : null,
-      kv('جمع', money(o.total)),
+      kv('Buyer', `${o.buyer?.name} — ${prettyPhone(o.buyer?.phone || '')}`),
+      kv('Recipient', `${o.recipient?.name} — ${prettyPhone(o.recipient?.phone || '')}`),
+      kv('Address', o.recipient?.address || '—'),
+      kv('When', `${dateShort(o.delivery.date)} · ${o.delivery.slot}`),
+      kv('Payment', { card: 'card to card', cash: 'on delivery', link: 'payment link' }[o.pay] || '—'),
+      o.anon ? kv('Sender', 'anonymous') : null,
+      kv('Total', money(o.total)),
     ));
 
     box.append(el('div', { class: 'eyebrow', style: { margin: '18px 0 10px' }, text: 'Status' }));
@@ -210,7 +210,7 @@ function detail(o, refresh) {
         onclick: () => {
           setStatus(o.id, k);
           [...row.children].forEach((c) => c.classList.remove('is-on'));
-          haptic(); toast('وضعیت به‌روز شد'); refresh(); close();
+          haptic(); toast('Status updated'); refresh(); close();
         },
       }));
     });
@@ -219,10 +219,10 @@ function detail(o, refresh) {
   });
 }
 
-/* ---------------------------------------------------------- the people */
+/* ----------------------------------------------------------- the people */
 function people() {
   const list = customers();
-  if (!list.length) return empty('users', 'هنوز مشتری‌ای ثبت نشده', 'با اولین سفارش اینجا پر می‌شود.');
+  if (!list.length) return empty('users', 'No customers yet', 'The first order fills this in.');
   const panel = el('div', { class: 'panel' });
   const rows = el('div', { class: 'rows' });
   list.forEach((c) => {
@@ -231,7 +231,7 @@ function people() {
       el('div', { class: 'row__b' },
         el('div', { class: 'row__t', text: c.name }),
         el('div', { class: 'row__s',
-          text: `${prettyPhone(c.phone)} · ${c.n} سفارش · آخرین ${relative(c.last)}` })),
+          text: `${prettyPhone(c.phone)} · ${c.n} order${c.n === 1 ? '' : 's'} · last ${relative(c.last)}` })),
       el('div', { class: 'row__e', text: money(c.spend) }),
     ));
   });
@@ -239,12 +239,12 @@ function people() {
   return panel;
 }
 
-/* ----------------------------------------------------------- the stock */
+/* ------------------------------------------------------------ the stock */
 function stock() {
   const panel = el('div', { class: 'panel' },
-    el('div', { class: 'panel__t', text: 'موجودی امروز' }),
+    el('div', { class: 'panel__t', text: 'Stock today' }),
     el('div', { class: 'panel__s',
-      text: 'هرچه خاموش شود، در سایت «موجود نیست» می‌خورد و دکمه سفارشش غیرفعال می‌شود.' }),
+      text: 'Anything switched off is marked “Out of stock” in the shop and cannot be ordered.' }),
   );
   const rows = el('div', { class: 'rows' });
   PRODUCTS.forEach((p) => {
@@ -257,7 +257,7 @@ function stock() {
         box.classList.toggle('is-on', on);
         e.currentTarget.setAttribute('aria-pressed', String(on));
         haptic();
-        toast(`${p.name} ${on ? 'موجود شد' : 'ناموجود شد'}`);
+        toast(`${p.name} is ${on ? 'back in stock' : 'out of stock'}`);
       },
     },
       el('span', { style: { textAlign: 'start' } },
@@ -269,7 +269,7 @@ function stock() {
   return panel;
 }
 
-/* ------------------------------------------------------------ the lock */
+/* ------------------------------------------------------------- the lock */
 function lockScreen() {
   const v = el('div', { class: 'view' });
   const box = el('div', { class: 'lock' });
@@ -277,15 +277,15 @@ function lockScreen() {
   box.append(brandEl('word', ''));
   box.firstChild.style.width = '116px';
   box.append(el('div', {},
-    el('h1', { style: { fontSize: '19px', fontWeight: '600' }, text: 'ورود کارکنان' }),
-    el('p', { class: 'muted tiny', style: { marginTop: '6px' }, text: 'رمز چهار رقمی آتلیه' }),
+    el('h1', { style: { fontSize: '19px', fontWeight: '600' }, text: 'Staff access' }),
+    el('p', { class: 'muted tiny', style: { marginTop: '6px' }, text: 'The four-digit studio code' }),
   ));
 
   const pin = el('div', { class: 'pin' });
   const cells = [];
   for (let i = 0; i < 4; i += 1) {
     const c = el('input', {
-      type: 'tel', inputmode: 'numeric', maxlength: '1', 'aria-label': `رقم ${i + 1}`,
+      type: 'tel', inputmode: 'numeric', maxlength: '1', 'aria-label': `Digit ${i + 1}`,
       autocomplete: 'off',
       oninput: (e) => {
         e.target.value = e.target.value.replace(/\D/g, '').slice(0, 1);
@@ -300,9 +300,9 @@ function lockScreen() {
   }
   box.append(pin);
 
-  const err = el('div', { class: 'err', hidden: true, text: 'رمز درست نیست.' });
+  const err = el('div', { class: 'err', hidden: true, text: 'Wrong code.' });
   box.append(err);
-  box.append(el('a', { class: 'tiny muted', href: '#/', text: 'بازگشت به سایت' }));
+  box.append(el('a', { class: 'tiny muted', href: '#/', text: 'Back to the site' }));
 
   function check() {
     const v2 = cells.map((c) => c.value).join('');
@@ -327,7 +327,7 @@ function lockScreen() {
   return v;
 }
 
-/* ---------------------------------------------------------------- glue */
+/* ----------------------------------------------------------------- glue */
 const kv = (k, val) => (val === null || val === undefined ? null
   : el('div', { class: 'kv' }, el('dt', { text: k }), el('dd', { text: val })));
 
@@ -343,5 +343,5 @@ function startOfDay(d = new Date()) {
 function nextSlot(list) {
   const s = list.map((o) => o.delivery.slot)
     .sort((a, b) => DELIVERY.slots.indexOf(a) - DELIVERY.slots.indexOf(b))[0];
-  return s ? `اولین: ${s}` : '—';
+  return s ? `first: ${s}` : '—';
 }

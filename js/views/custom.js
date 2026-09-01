@@ -8,12 +8,11 @@
 import { el, money, haptic, scrollTop, validPhone } from '../util.js';
 import { icon } from '../icons.js';
 import { OCCASIONS, FORMS, PALETTES, FLOWERS, BUDGETS, WRAPS } from '../data.js';
-import { BRAND } from '../config.js';
 import { pageHead, footer, toast, note } from '../ui.js';
 import { go } from '../router.js';
 import { addToBag, state, saveProfile } from '../store.js';
 
-const STEPS = ['مناسبت', 'فرم', 'رنگ', 'گل‌ها', 'بودجه', 'جزئیات'];
+const STEPS = ['Occasion', 'Form', 'Palette', 'Flowers', 'Budget', 'Details'];
 
 export default function custom() {
   const brief = {
@@ -27,8 +26,8 @@ export default function custom() {
   const v = el('div', { class: 'view page' });
   const wrap = el('div', { class: 'wrap wrap--tight' });
 
-  wrap.append(pageHead('سفارش اختصاصی',
-    'شش قدم کوتاه. در پایان، کایا ترکیب را می‌چیند و قیمت نهایی را قبل از آماده‌سازی با شما هماهنگ می‌کند.'));
+  wrap.append(pageHead('Bespoke',
+    'Six short steps. At the end, KAYA arranges the piece and confirms the final price with you before anything is made.'));
 
   const bar = el('div', { class: 'steps' }, ...STEPS.map(() => el('i')));
   wrap.append(bar);
@@ -37,8 +36,9 @@ export default function custom() {
     class: 'eyebrow eyebrow--ink', style: { marginBottom: '10px' },
   });
   const title = el('h2', {
-    style: { fontSize: 'clamp(19px,4.4vw,24px)', fontWeight: '600',
-             letterSpacing: '-.02em', marginBottom: '6px' },
+    class: 'display',
+    style: { fontSize: 'clamp(20px,4.6px,26px)', fontWeight: '600',
+             letterSpacing: '-.01em', marginBottom: '6px' },
   });
   const sub = el('p', {
     class: 'muted', style: { fontSize: '13.5px', marginBottom: '20px' },
@@ -47,7 +47,7 @@ export default function custom() {
   wrap.append(label, title, sub, body);
 
   const back = el('button', {
-    class: 'btn btn--ghost', type: 'button', text: 'قبلی',
+    class: 'btn btn--ghost', type: 'button', text: 'Back',
     onclick: () => { step -= 1; render(); },
   });
   const next = el('button', {
@@ -56,7 +56,7 @@ export default function custom() {
       if (step < STEPS.length - 1) { step += 1; render(); }
       else submit();
     },
-  }, el('span', { text: 'بعدی' }));
+  }, el('span', { text: 'Next' }));
   const nav = el('div', {
     style: { display: 'flex', gap: '10px', marginTop: '26px' },
   }, back, next);
@@ -66,14 +66,14 @@ export default function custom() {
 
   /* ------------------------------------------------------------- render */
   function render() {
-    [...bar.children].forEach((i, n) => {
-      i.classList.toggle('is-done', n < step);
-      i.classList.toggle('is-on', n === step);
+    [...bar.children].forEach((i, k) => {
+      i.classList.toggle('is-done', k < step);
+      i.classList.toggle('is-on', k === step);
     });
     label.textContent = `Step ${step + 1} / ${STEPS.length}`;
     body.replaceChildren();
     back.style.visibility = step === 0 ? 'hidden' : '';
-    next.firstChild.textContent = step === STEPS.length - 1 ? 'ثبت درخواست' : 'بعدی';
+    next.firstChild.textContent = step === STEPS.length - 1 ? 'Send the brief' : 'Next';
     ({
       0: stepOccasion, 1: stepForm, 2: stepPalette,
       3: stepFlowers, 4: stepBudget, 5: stepDetails,
@@ -102,24 +102,24 @@ export default function custom() {
 
   /* -------------------------------------------------------------- steps */
   function stepOccasion() {
-    title.textContent = 'مناسبت چیست؟';
-    sub.textContent = 'همین یک انتخاب، پالت و فرم پیشنهادی را جهت می‌دهد.';
+    title.textContent = 'What is the occasion?';
+    sub.textContent = 'This one choice steers the palette and the form.';
     body.append(pickGrid(OCCASIONS,
       (o) => brief.occasion === o.id,
       (o) => { brief.occasion = o.id; }));
   }
 
   function stepForm() {
-    title.textContent = 'در چه فرمی؟';
-    sub.textContent = 'اگر مطمئن نیستید، «دسته‌گل» را بزنید — بعداً قابل تغییر است.';
+    title.textContent = 'In what form?';
+    sub.textContent = 'Not sure? Take “Bouquet” — it can change later.';
     body.append(pickGrid(FORMS,
       (f) => brief.form === f.id,
       (f) => { brief.form = f.id; }));
   }
 
   function stepPalette() {
-    title.textContent = 'چه رنگی؟';
-    sub.textContent = 'کایا در همین طیف می‌چیند و تناژ دقیق را با گل موجود آن روز تنظیم می‌کند.';
+    title.textContent = 'Which palette?';
+    sub.textContent = 'KAYA arranges inside this range and tunes the exact shades to the day’s flowers.';
     body.append(pickGrid(PALETTES,
       (p) => brief.palette === p.id,
       (p) => { brief.palette = p.id; },
@@ -130,8 +130,8 @@ export default function custom() {
   }
 
   function stepFlowers() {
-    title.textContent = 'کدام گل‌ها باشند؟';
-    sub.textContent = 'چند تا انتخاب کنید. هر چه انتخاب نکنید را کایا با گل تازه همان روز پر می‌کند.';
+    title.textContent = 'Which flowers?';
+    sub.textContent = 'Pick a few. Whatever you leave out, KAYA fills with the freshest of that day.';
     body.append(pickGrid(FLOWERS,
       (f) => brief.flowers.has(f.id),
       (f) => {
@@ -139,12 +139,12 @@ export default function custom() {
         else brief.flowers.add(f.id);
       }));
     body.append(el('div', { class: 'tiny muted', style: { marginTop: '12px' },
-      text: 'خالی گذاشتن هم اشکالی ندارد — یعنی انتخاب با کایا.' }));
+      text: 'Leaving this empty is fine — it means KAYA chooses.' }));
   }
 
   function stepBudget() {
-    title.textContent = 'حدود چه بودجه‌ای؟';
-    sub.textContent = 'عدد نهایی نیست؛ فقط بگویید در چه محدوده‌ای می‌چینیم.';
+    title.textContent = 'Around what budget?';
+    sub.textContent = 'Not a final number — just the range to arrange within.';
 
     const out = el('div', {
       style: { fontSize: '27px', fontWeight: '700', letterSpacing: '-.02em',
@@ -153,15 +153,15 @@ export default function custom() {
     const hint = el('div', { class: 'tiny muted center', style: { marginBottom: '18px' } });
     const rng = el('input', {
       class: 'rng', type: 'range', min: '0', max: String(BUDGETS.length - 1),
-      step: '1', value: String(brief.budget), 'aria-label': 'بودجه',
+      step: '1', value: String(brief.budget), 'aria-label': 'Budget',
       oninput: (e) => { brief.budget = Number(e.target.value); paint(); },
     });
     function paint() {
       const b = BUDGETS[brief.budget];
       out.textContent = money(b);
       hint.textContent = brief.budget === BUDGETS.length - 1
-        ? 'و بالاتر — برای قطعه‌های بزرگ تماس بگیرید'
-        : `تا حدود ${money(BUDGETS[brief.budget + 1])}`;
+        ? 'and above — call for the largest pieces'
+        : `up to about ${money(BUDGETS[brief.budget + 1])}`;
     }
     paint();
     body.append(out, hint, rng);
@@ -172,7 +172,7 @@ export default function custom() {
        el('span', { text: money(BUDGETS[BUDGETS.length - 1]) + '+' })));
 
     body.append(el('div', { class: 'panel mt-l' },
-      el('div', { class: 'panel__t', text: 'رنگ کاغذ یا جعبه' }),
+      el('div', { class: 'panel__t', text: 'Paper or box colour' }),
       el('div', { class: 'chips', style: { paddingInline: '0', marginInline: '0', marginTop: '10px' } },
         ...WRAPS.map((w) => {
           const c = el('button', {
@@ -196,43 +196,43 @@ export default function custom() {
   }
 
   function stepDetails() {
-    title.textContent = 'جزئیات آخر';
-    sub.textContent = 'هر چه بنویسید مستقیم روی برگه سفارش آتلیه می‌نشیند.';
+    title.textContent = 'The last details';
+    sub.textContent = 'Everything you write here lands on the atelier’s order sheet, word for word.';
 
-    body.append(field('نام شما', el('input', {
-      class: 'inp', value: brief.name, placeholder: 'مثلاً سارا مهدوی',
+    body.append(field('Your name', el('input', {
+      class: 'inp', value: brief.name, placeholder: 'e.g. Sara Mahdavi',
       autocomplete: 'name',
       oninput: (e) => { brief.name = e.target.value; validate(); },
     })));
 
     const phone = el('input', {
-      class: 'inp', type: 'tel', dir: 'ltr', inputmode: 'numeric',
-      value: brief.phone, placeholder: '09xxxxxxxxx', autocomplete: 'tel',
+      class: 'inp', type: 'tel', inputmode: 'numeric',
+      value: brief.phone, placeholder: '09xx xxx xxxx', autocomplete: 'tel',
       oninput: (e) => { brief.phone = e.target.value; validate(); },
     });
-    const phoneErr = el('div', { class: 'err', hidden: true, text: 'شماره موبایل معتبر نیست.' });
-    body.append(field('شماره تماس', phone, 'برای هماهنگی قیمت و زمان تحویل.', phoneErr));
+    const phoneErr = el('div', { class: 'err', hidden: true, text: 'That doesn’t look like a valid mobile number.' });
+    body.append(field('Phone', phone, 'For confirming the price and the delivery time.', phoneErr));
 
-    body.append(field('متن ریبون', el('input', {
+    body.append(field('Ribbon text', el('input', {
       class: 'inp', maxlength: '48', value: brief.ribbon,
-      placeholder: 'مثلاً: افتتاح مبارک — شرکت آرتان',
+      placeholder: 'e.g. Congratulations — Artan Co.',
       oninput: (e) => { brief.ribbon = e.target.value; },
-    }), 'اختیاری. حداکثر ۴۸ حرف روی ریبون ساتن چاپ می‌شود.'));
+    }), 'Optional. Up to 48 characters, printed on satin.'));
 
-    body.append(field('متن کارت', el('textarea', {
+    body.append(field('Card message', el('textarea', {
       class: 'inp', maxlength: '240', text: brief.message,
-      placeholder: 'پیامی که با خط خوش روی کارت نوشته شود',
+      placeholder: 'A message, written in a fine hand on the card',
       oninput: (e) => { brief.message = e.target.value; },
-    }), 'اختیاری. بدون هزینه.'));
+    }), 'Optional. No charge.'));
 
-    body.append(field('توضیح دیگری هست؟', el('textarea', {
+    body.append(field('Anything else?', el('textarea', {
       class: 'inp', maxlength: '400', text: brief.notes,
-      placeholder: 'مثلاً: گیرنده به عطر گل حساس است، یا باید قبل از ساعت ۱۰ برسد',
+      placeholder: 'e.g. the recipient is sensitive to strong scent, or it must arrive before 10 am',
       oninput: (e) => { brief.notes = e.target.value; },
     })));
 
     body.append(summary());
-    body.append(note('این درخواست هنوز سفارش قطعی نیست. کایا بعد از خواندن آن تماس می‌گیرد، قیمت نهایی را می‌گوید و بعد از تأیید شما آماده‌سازی شروع می‌شود.', 'info'));
+    body.append(note('This is a request, not a charge. KAYA reads the brief, calls you with a final price, and starts arranging only after you agree.', 'info'));
 
     // validate() needs these to show/hide the error.
     body._phone = phone; body._phoneErr = phoneErr;
@@ -250,23 +250,22 @@ export default function custom() {
 
   function summary() {
     const nameOf = (list, id) => list.find((x) => x.id === id)?.name || '—';
-    const fl = [...brief.flowers].map((f) => nameOf(FLOWERS, f)).join('، ');
-    const p = el('div', { class: 'panel mt-l' },
-      el('div', { class: 'panel__t', text: 'خلاصه درخواست' }),
+    const fl = [...brief.flowers].map((f) => nameOf(FLOWERS, f)).join(', ');
+    return el('div', { class: 'panel mt-l' },
+      el('div', { class: 'panel__t', text: 'Your brief' }),
       el('dl', {},
-        kv('مناسبت', nameOf(OCCASIONS, brief.occasion)),
-        kv('فرم', nameOf(FORMS, brief.form)),
-        kv('پالت رنگ', nameOf(PALETTES, brief.palette)),
-        kv('گل‌ها', fl || 'انتخاب با کایا'),
-        kv('کاغذ / جعبه', nameOf(WRAPS, brief.wrap)),
-        kv('بودجه', money(BUDGETS[brief.budget])),
+        kv('Occasion', nameOf(OCCASIONS, brief.occasion)),
+        kv('Form', nameOf(FORMS, brief.form)),
+        kv('Palette', nameOf(PALETTES, brief.palette)),
+        kv('Flowers', fl || 'KAYA’s choice'),
+        kv('Paper / box', nameOf(WRAPS, brief.wrap)),
+        kv('Budget', money(BUDGETS[brief.budget])),
       ),
     );
-    return p;
   }
 
-  const kv = (k, v) => el('dl', { class: 'kv', style: { margin: '0' } },
-    el('dt', { text: k }), el('dd', { text: v }));
+  const kv = (k, val) => el('dl', { class: 'kv', style: { margin: '0' } },
+    el('dt', { text: k }), el('dd', { text: val }));
 
   /* ----------------------------------------------------------- validate */
   function validate() {
@@ -292,7 +291,7 @@ export default function custom() {
     const parts = [
       nameOf(OCCASIONS, brief.occasion),
       nameOf(FORMS, brief.form),
-      `پالت ${nameOf(PALETTES, brief.palette)}`,
+      `${nameOf(PALETTES, brief.palette)} palette`,
     ];
     const flowers = [...brief.flowers].map((f) => nameOf(FLOWERS, f));
 
@@ -300,7 +299,7 @@ export default function custom() {
 
     addToBag({
       slug: 'custom',
-      name: 'سفارش اختصاصی',
+      name: 'Bespoke arrangement',
       photo: 'arghavan',
       custom: true,
       size: null,
@@ -313,7 +312,7 @@ export default function custom() {
         form: nameOf(FORMS, brief.form),
         palette: nameOf(PALETTES, brief.palette),
         wrap: nameOf(WRAPS, brief.wrap),
-        flowers: flowers.length ? flowers.join('، ') : 'انتخاب با کایا',
+        flowers: flowers.length ? flowers.join(', ') : 'KAYA’s choice',
         budget: BUDGETS[brief.budget],
         ribbon: brief.ribbon,
         message: brief.message,
@@ -323,7 +322,7 @@ export default function custom() {
     });
 
     haptic(14);
-    toast('درخواست شما در سبد ثبت شد');
+    toast('Your brief is in the bag');
     go('/bag');
   }
 

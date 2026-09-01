@@ -1,22 +1,22 @@
 import { el, money, haptic } from '../util.js';
 import { icon } from '../icons.js';
 import { SIZES, ADDONS, DELIVERY } from '../config.js';
-import { photo, pageHead, footer, empty, qtyControl, toast, note } from '../ui.js';
+import { photo, pageHead, footer, empty, qtyControl, note } from '../ui.js';
 import { go } from '../router.js';
 import { state, setQty, bagTotal, bagCount } from '../store.js';
 
 export default function bag() {
   const v = el('div', { class: 'view page' });
   const wrap = el('div', { class: 'wrap wrap--tight' });
-  wrap.append(pageHead('سبد', bagCount() ? null : undefined));
+  wrap.append(pageHead('Bag'));
 
   if (!state.bag.length) {
-    wrap.append(empty('bag', 'سبد خالی است',
-      'یکی از قطعه‌های کایا را انتخاب کنید، یا سفارش اختصاصی بدهید.',
+    wrap.append(empty('bag', 'The bag is empty',
+      'Choose one of the pieces, or place a bespoke order.',
       el('div', { style: { display: 'flex', gap: '9px', flexWrap: 'wrap',
                            justifyContent: 'center', marginTop: '6px' } },
-        el('a', { class: 'btn btn--sm', href: '#/shop', text: 'دیدن گل‌ها' }),
-        el('a', { class: 'btn btn--sm btn--ghost', href: '#/custom', text: 'سفارش اختصاصی' }),
+        el('a', { class: 'btn btn--sm', href: '#/shop', text: 'See the pieces' }),
+        el('a', { class: 'btn btn--sm btn--ghost', href: '#/custom', text: 'Bespoke order' }),
       )));
     v.append(wrap, footer());
     return v;
@@ -30,10 +30,10 @@ export default function bag() {
   const totals = el('div', { class: 'panel' });
   wrap.append(totals);
 
-  wrap.append(note('کرایه ارسال در مرحله بعد و بر اساس منطقه محاسبه می‌شود.', 'truck'));
+  wrap.append(note('Delivery is priced at the next step, by district.', 'truck'));
 
   const cta = el('a', { class: 'btn btn--full btn--lg mt-l', href: '#/checkout' },
-    'ادامه و تعیین زمان تحویل',
+    'Continue to delivery',
     el('span', { html: icon('chev'), style: { display: 'contents' } }));
   wrap.append(cta);
 
@@ -43,7 +43,7 @@ export default function bag() {
 
     state.bag.forEach((l) => {
       const meta = [];
-      if (l.size) meta.push(`اندازه ${SIZES.find((s) => s.id === l.size)?.name || l.size}`);
+      if (l.size) meta.push(SIZES.find((s) => s.id === l.size)?.name || l.size);
       (l.addons || []).forEach((a) => {
         const ad = ADDONS.find((x) => x.id === a);
         if (ad) meta.push(ad.name);
@@ -56,11 +56,11 @@ export default function bag() {
         el('div', { class: 'line__b' },
           el('div', { class: 'line__t', text: l.name }),
           meta.length ? el('div', { class: 'line__s', text: meta.join(' · ') }) : null,
-          l.note ? el('div', { class: 'line__s', text: `کارت: «${l.note}»` }) : null,
+          l.note ? el('div', { class: 'line__s', text: `Card: “${l.note}”` }) : null,
           l.estimate ? el('div', { class: 'line__s',
-            style: { color: 'var(--ink-2)' }, text: 'قیمت تخمینی — بعد از تماس نهایی می‌شود' }) : null,
+            style: { color: 'var(--ink-2)' }, text: 'Estimate — final price confirmed by phone' }) : null,
           el('div', { class: 'line__f' },
-            qtyControl(l.qty, (n) => { setQty(l.id, n); haptic(); paint(); }),
+            qtyControl(l.qty, (q) => { setQty(l.id, q); haptic(); paint(); }),
             el('div', { class: 'line__p', text: money(l.price * l.qty) }),
           ),
         ),
@@ -71,13 +71,13 @@ export default function bag() {
     const sub = bagTotal();
     totals.replaceChildren(
       el('dl', {},
-        row2('جمع اقلام', money(sub)),
-        row2('کرایه ارسال', 'مرحله بعد'),
+        row2('Items', money(sub)),
+        row2('Delivery', 'next step'),
         sub >= DELIVERY.freeOver
-          ? row2('تخفیف ارسال', 'رایگان — سفارش بالای ' + money(DELIVERY.freeOver))
+          ? row2('Delivery offer', 'free over ' + money(DELIVERY.freeOver))
           : null,
         el('div', { class: 'kv kv--total' },
-          el('dt', { text: 'جمع' }), el('dd', { text: money(sub) })),
+          el('dt', { text: 'Total' }), el('dd', { text: money(sub) })),
       ),
     );
   }

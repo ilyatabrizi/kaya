@@ -1,22 +1,22 @@
 // Delivery, recipient, payment choice, done.
 //
-// No card is taken. An Iranian florist this size settles by card-to-card or on
+// No card is taken. A florist this size settles by card-to-card or on
 // delivery, and a preview that pretends to hold a gateway would be a lie the
 // client would find out about the first time he clicked it.
 
-import { el, money, haptic, validPhone, faWeek, faShort, scrollTop } from '../util.js';
+import { el, money, haptic, validPhone, weekday, dateShort } from '../util.js';
 import { icon } from '../icons.js';
 import { DELIVERY, BRAND } from '../config.js';
-import { pageHead, footer, note, toast, brandEl } from '../ui.js';
+import { pageHead, footer, note, toast } from '../ui.js';
 import { go } from '../router.js';
 import {
   state, bagTotal, clearBag, placeOrder, saveProfile, addAddress,
 } from '../store.js';
 
 const PAY = [
-  { id: 'card', name: 'کارت به کارت', sub: 'شماره کارت بعد از ثبت پیامک می‌شود' },
-  { id: 'cash', name: 'پرداخت هنگام تحویل', sub: 'نقدی یا کارتخوان همراه پیک' },
-  { id: 'link', name: 'لینک پرداخت', sub: 'لینک درگاه برای شما فرستاده می‌شود' },
+  { id: 'card', name: 'Card to card', sub: 'the card number is sent to you after ordering' },
+  { id: 'cash', name: 'Pay on delivery', sub: 'cash, or the courier carries a card reader' },
+  { id: 'link', name: 'Payment link', sub: 'a gateway link is sent to your phone' },
 ];
 
 export default function checkout() {
@@ -37,23 +37,23 @@ export default function checkout() {
 
   const v = el('div', { class: 'view page' });
   const wrap = el('div', { class: 'wrap wrap--tight' });
-  wrap.append(pageHead('تحویل', 'کجا، کِی، و به دست چه کسی.'));
+  wrap.append(pageHead('Delivery', 'Where, when, and into whose hands.'));
 
-  /* ------------------------------------------------------------- زمان */
+  /* --------------------------------------------------------------- zones */
   const zonePanel = el('div', { class: 'panel' },
-    el('div', { class: 'panel__t', text: 'نحوه دریافت' }));
+    el('div', { class: 'panel__t', text: 'How it reaches you' }));
   const zoneRows = el('div', { class: 'rows' });
   DELIVERY.zones.forEach((z) => {
     const b = el('button', {
       class: 'row row--btn', type: 'button',
-      onclick: () => { f.zone = z.id; syncZones(); haptic(); paintTotals(); },
+      onclick: () => { f.zone = z.id; syncZones(); haptic(); paintTotals(); validate(); },
     },
       el('div', { class: 'row__ic', html: icon(z.id === 'pickup' ? 'pin' : 'truck') }),
       el('div', { class: 'row__b' },
         el('div', { class: 'row__t', text: z.name }),
         el('div', { class: 'row__s', text: `${z.sub} · ${z.eta}` })),
       el('div', { class: 'row__e' },
-        el('span', { text: z.fee ? money(z.fee) : 'رایگان' }),
+        el('span', { text: z.fee ? money(z.fee) : 'free' }),
         el('span', { class: 'zone-tick', html: icon('check') })),
     );
     zoneRows.append(b);
@@ -69,10 +69,10 @@ export default function checkout() {
     addrPanel.hidden = f.zone === 'pickup';
   }
 
-  /* ------------------------------------------------------------- تاریخ */
+  /* ---------------------------------------------------------------- when */
   const datePanel = el('div', { class: 'panel' },
-    el('div', { class: 'panel__t', text: 'زمان تحویل' }),
-    el('div', { class: 'panel__s', text: 'تا ۷ روز آینده. برای امروز، تا ساعت ۱۵ ثبت کنید.' }),
+    el('div', { class: 'panel__t', text: 'Delivery time' }),
+    el('div', { class: 'panel__s', text: 'Up to 7 days ahead. For today, order before 3 pm.' }),
   );
   const dayChips = el('div', { class: 'chips',
     style: { paddingInline: '0', marginInline: '0' } });
@@ -108,13 +108,13 @@ export default function checkout() {
   datePanel.append(slotChips);
   wrap.append(datePanel);
 
-  /* ------------------------------------------------------------ گیرنده */
+  /* ----------------------------------------------------------- recipient */
   const addrPanel = el('div', { class: 'panel' },
-    el('div', { class: 'panel__t', text: 'گیرنده' }),
-    el('div', { class: 'panel__s', text: 'قبل از حرکت پیک با گیرنده تماس می‌گیریم.' }),
+    el('div', { class: 'panel__t', text: 'Recipient' }),
+    el('div', { class: 'panel__s', text: 'We call the recipient before the courier moves.' }),
   );
 
-  const selfSw = swRow('گیرنده خودم هستم', 'آدرس و شماره خودتان استفاده می‌شود', (on) => {
+  const selfSw = swRow('I am the recipient', 'your own name and number are used', (on) => {
     f.forSelf = on;
     recWrap.hidden = on;
     validate();
@@ -122,25 +122,25 @@ export default function checkout() {
   addrPanel.append(selfSw);
 
   const recWrap = el('div', {});
-  const recName = inp({ placeholder: 'نام گیرنده', autocomplete: 'name' },
+  const recName = inp({ placeholder: 'Recipient’s name', autocomplete: 'name' },
     (e) => { f.recName = e.target.value; validate(); });
   const recPhone = inp({
-    placeholder: '09xxxxxxxxx', type: 'tel', dir: 'ltr', inputmode: 'numeric',
+    placeholder: '09xx xxx xxxx', type: 'tel', inputmode: 'numeric',
   }, (e) => { f.recPhone = e.target.value; validate(); });
-  const recPhoneErr = el('div', { class: 'err', hidden: true, text: 'شماره موبایل معتبر نیست.' });
+  const recPhoneErr = el('div', { class: 'err', hidden: true, text: 'That doesn’t look like a valid mobile number.' });
   recWrap.append(
-    field('نام گیرنده', recName),
-    field('شماره گیرنده', recPhone, null, recPhoneErr),
+    field('Recipient’s name', recName),
+    field('Recipient’s phone', recPhone, null, recPhoneErr),
   );
   addrPanel.append(recWrap);
 
   const address = el('textarea', {
-    class: 'inp', placeholder: 'تبریز، خیابان …، کوچه …، پلاک …',
+    class: 'inp', placeholder: 'Street, lane, building, number — Tabriz',
     oninput: (e) => { f.address = e.target.value; validate(); },
   });
-  const unit = inp({ placeholder: 'واحد / طبقه / زنگ (اختیاری)' },
+  const unit = inp({ placeholder: 'Unit / floor / bell (optional)' },
     (e) => { f.unit = e.target.value; });
-  addrPanel.append(field('آدرس', address), field('جزئیات', unit));
+  addrPanel.append(field('Address', address), field('Details', unit));
 
   if (state.profile.addresses.length) {
     const saved = el('div', { class: 'chips',
@@ -151,39 +151,39 @@ export default function checkout() {
         onclick: () => {
           address.value = a.address; f.address = a.address;
           unit.value = a.unit || ''; f.unit = a.unit || '';
-          toast('آدرس ذخیره‌شده وارد شد'); validate();
+          toast('Saved address filled in'); validate();
         },
       }));
     });
     addrPanel.insertBefore(saved, recWrap);
   }
 
-  addrPanel.append(swRow('این آدرس را ذخیره کن', 'برای سفارش‌های بعدی', (on) => {
+  addrPanel.append(swRow('Save this address', 'for the next order', (on) => {
     f.saveAddr = on;
   }, true));
-  addrPanel.append(swRow('فرستنده ناشناس بماند', 'نام شما روی کارت نوشته نمی‌شود', (on) => {
+  addrPanel.append(swRow('Send anonymously', 'your name is left off the card', (on) => {
     f.anon = on;
   }));
   wrap.append(addrPanel);
 
-  /* ---------------------------------------------------------- سفارش‌دهنده */
+  /* ----------------------------------------------------------------- you */
   const buyerPanel = el('div', { class: 'panel' },
-    el('div', { class: 'panel__t', text: 'شما' }),
-    el('div', { class: 'panel__s', text: 'برای هماهنگی سفارش و ارسال فاکتور.' }),
+    el('div', { class: 'panel__t', text: 'You' }),
+    el('div', { class: 'panel__s', text: 'For confirming the order.' }),
   );
-  const bName = inp({ placeholder: 'نام و نام خانوادگی', autocomplete: 'name',
+  const bName = inp({ placeholder: 'Full name', autocomplete: 'name',
     value: f.buyerName }, (e) => { f.buyerName = e.target.value; validate(); });
   const bPhone = inp({
-    placeholder: '09xxxxxxxxx', type: 'tel', dir: 'ltr', inputmode: 'numeric',
+    placeholder: '09xx xxx xxxx', type: 'tel', inputmode: 'numeric',
     autocomplete: 'tel', value: f.buyerPhone,
   }, (e) => { f.buyerPhone = e.target.value; validate(); });
-  const bPhoneErr = el('div', { class: 'err', hidden: true, text: 'شماره موبایل معتبر نیست.' });
-  buyerPanel.append(field('نام', bName), field('شماره تماس', bPhone, null, bPhoneErr));
+  const bPhoneErr = el('div', { class: 'err', hidden: true, text: 'That doesn’t look like a valid mobile number.' });
+  buyerPanel.append(field('Name', bName), field('Phone', bPhone, null, bPhoneErr));
   wrap.append(buyerPanel);
 
-  /* ------------------------------------------------------------ پرداخت */
+  /* ------------------------------------------------------------- payment */
   const payPanel = el('div', { class: 'panel' },
-    el('div', { class: 'panel__t', text: 'پرداخت' }));
+    el('div', { class: 'panel__t', text: 'Payment' }));
   const payRows = el('div', { class: 'rows' });
   PAY.forEach((p) => {
     payRows.append(el('button', {
@@ -205,7 +205,7 @@ export default function checkout() {
     });
   }
 
-  /* ------------------------------------------------------------ جمع کل */
+  /* -------------------------------------------------------------- totals */
   const totals = el('div', { class: 'panel' });
   wrap.append(totals);
   function paintTotals() {
@@ -214,27 +214,27 @@ export default function checkout() {
     const free = sub >= DELIVERY.freeOver && zone.id !== 'pickup';
     const fee = free ? 0 : zone.fee;
     totals.replaceChildren(el('dl', {},
-      kv('جمع اقلام', money(sub)),
-      kv('کرایه ارسال', fee ? money(fee) : (zone.id === 'pickup' ? '—' : 'رایگان')),
+      kv('Items', money(sub)),
+      kv('Delivery', fee ? money(fee) : (zone.id === 'pickup' ? '—' : 'free')),
       el('div', { class: 'kv kv--total' },
-        el('dt', { text: 'قابل پرداخت' }), el('dd', { text: money(sub + fee) })),
+        el('dt', { text: 'To pay' }), el('dd', { text: money(sub + fee) })),
     ));
     return sub + fee;
   }
 
-  wrap.append(note('اگر گلی از ترکیب در دسترس نباشد، قبل از آماده‌سازی با شما تماس می‌گیریم و جایگزین را می‌گوییم.', 'info'));
+  wrap.append(note('If a flower in the mix is unavailable, we call before arranging and agree the substitute.', 'info'));
 
   const submit = el('button', {
-    class: 'btn btn--full btn--lg mt-l', type: 'button', text: 'ثبت سفارش',
+    class: 'btn btn--full btn--lg mt-l', type: 'button', text: 'Place the order',
     onclick: place,
   });
   wrap.append(submit);
   wrap.append(el('div', { class: 'tiny muted center mt' },
-    'با ثبت سفارش، تماس آتلیه برای هماهنگی را می‌پذیرید.'));
+    'By ordering, you accept a call from the atelier to confirm.'));
 
   v.append(wrap, footer());
 
-  /* --------------------------------------------------------------- glue */
+  /* ---------------------------------------------------------------- glue */
   function inp(attrs, oninput) {
     return el('input', { class: 'inp', ...attrs, oninput });
   }
@@ -301,7 +301,7 @@ export default function checkout() {
     const order = placeOrder({
       buyer: { name: f.buyerName.trim(), phone: validPhone(f.buyerPhone) },
       recipient: f.zone === 'pickup'
-        ? { name: 'تحویل حضوری', phone: validPhone(f.buyerPhone), address: BRAND.address }
+        ? { name: 'Pickup', phone: validPhone(f.buyerPhone), address: BRAND.address }
         : {
             name: f.forSelf ? f.buyerName.trim() : f.recName.trim(),
             phone: f.forSelf ? validPhone(f.buyerPhone) : validPhone(f.recPhone),
@@ -335,8 +335,8 @@ function nextDays(n = 7) {
     d.setHours(12, 0, 0, 0);
     out.push({
       value: d.getTime(),
-      week: i === 0 ? 'امروز' : i === 1 ? 'فردا' : faWeek(d),
-      label: faShort(d),
+      week: i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : weekday(d),
+      label: dateShort(d),
     });
   }
   return out;

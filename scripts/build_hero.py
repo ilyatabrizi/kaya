@@ -1,146 +1,244 @@
 #!/usr/bin/env python3
-"""Cut the two Higgsfield clips into the scroll-scrubbed hero video.
+"""Cut the arrangement out of the Higgsfield clip, frame by frame, into the
+transparent sequence the hero scrubs.
 
-The first build of this shipped a WebP frame sequence, on the theory that
-seeking a <video> is unreliable on iOS. Measured, that theory was expensive:
-the footage is dense floral macro with no flat areas, so WebP could not get
-below ~45KB a frame, and 96 frames — already coarse enough to step visibly
-under a finger — cost 4.3MB. The same twelve seconds as H.264 costs 1.7MB and
-carries 193 frames, because inter-frame prediction is exactly the thing dense
-similar frames reward.
+The client's call: the hero must not read as a video. No window, no
+photographic background — the arrangement itself, floating on the white page,
+turning and closing in as you scroll. So the presentation is a cutout: every
+frame of clip A matted against its studio background, cropped, and shipped as
+WebP with alpha, drawn to a canvas by the scrubber.
 
-So it is a video, encoded for seeking rather than for playback:
+Matting is isnet-general-use (rembg). Two things make it hold up:
 
-  keyint=8      a keyframe every half second, so any seek decodes at most
-                seven frames to get where it is going
-  bframes=0     no out-of-order frames, so a seek lands on the frame asked for
-  fps=16        the scrubber sets the pace, not the clock; 16 is smooth under a
-                finger and saves a third over 24
-  faststart     moov atom first, so it starts serving before it has all arrived
+  * Padding. The model is trained on bounded subjects; the moment the blooms
+    touch the frame edge it starts dissolving them. Extending each frame with
+    a blurred stretch of its own background before matting — and cropping the
+    matte back — keeps the subject bounded and rescues the whole clip.
+  * Temporal smoothing. The matte is computed per frame, so fine spikes
+    shimmer. A 1-2-1 blend of each alpha with its neighbours damps it; the
+    footage moves slowly enough that nothing smears.
 
-The cut is a match cut: A pushes into the blooms, B starts inside them and
-drifts back out until the KAYA ribbon lands on the last frame.
+The scrub has two phases and the manifest records the boundary:
+
+  frames [0 .. safe]        the whole silhouette is inside the frame — the
+                            floating-object phase
+  frames (safe .. count-1]  the blooms clip the frame edges — usable only once
+                            the page has zoomed past the object's own bounds,
+                            which is exactly when the scrub uses them
 
 Out:
-  assets/hero/hero.mp4       the scrub track
-  assets/hero/poster.webp    frame 0 — the LCP image, on screen before the video
-  assets/hero/tail.webp      last frame, held under the video while it seeks
-  js/hero-manifest.js        duration, dimensions, the cut point
+  assets/hero/f-000.webp …   the sequence (RGBA)
+  assets/hero/poster.webp    frame 0 — the LCP image
+  js/hero-manifest.js        count, size, the safe index
 
     python3 scripts/build_hero.py
 
-Needs imageio-ffmpeg (bundles a static ffmpeg) and Pillow.
+Needs imageio-ffmpeg, Pillow, numpy, rembg (isnet-general-use).
 """
 
+import io
 import json
-import os
 import pathlib
 import re
 import shutil
 import subprocess
 
 import imageio_ffmpeg
-from PIL import Image
+import numpy as np
+from PIL import Image, ImageFilter
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 MEDIA = ROOT / "media"
 OUT = ROOT / "assets" / "hero"
 
-CLIPS = ["clipA.mp4", "clipB.mp4"]
-WIDTH = 672          # ~2x the framed window on desktop, ~2x full-bleed on a phone
-FPS = 16
-CRF = 29
-GOP = 8
+CLIP = MEDIA / "clipA.mp4"
+T_END = 4.35         # seconds of the clip worth using (later, blooms swallow the frame)
+MATTES = 92          # how many frames get matted (and cached) across T_END
+FLOAT_N = 40         # frames sampled inside the whole-silhouette range
+DIVE_N = 14          # frames sampled after it — the dive moves fast, it needs fewer
+WIDTH = 720
+BUDGET_KB = 2600
+Q_START = 62
+PAD = 0.22           # matting context border, fraction of each side
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
 
-# Each clip holds still for a few frames at its ends. Trim them so the join
-# lands on movement and the scrub never feels stuck.
-TRIM_HEAD = 0.10     # seconds
-TRIM_TAIL = 0.14
 
-
-def probe(path):
-    out = subprocess.run([FFMPEG, "-i", str(path)], capture_output=True, text=True).stderr
-    line = next((l for l in out.splitlines() if "Stream" in l and "Video:" in l), "")
+def decode():
+    probe = subprocess.run([FFMPEG, "-i", str(CLIP)], capture_output=True, text=True).stderr
+    line = next((l for l in probe.splitlines() if "Stream" in l and "Video:" in l), "")
     m = re.search(r"\b(\d{2,5})x(\d{2,5})\b", line)
-    d = re.search(r"Duration: (\d+):(\d+):([\d.]+)", out)
-    if not m or not d:
-        raise SystemExit(f"could not probe {path.name}")
-    dur = int(d.group(1)) * 3600 + int(d.group(2)) * 60 + float(d.group(3))
-    return int(m.group(1)), int(m.group(2)), dur
+    w, h = int(m.group(1)), int(m.group(2))
+    ow = WIDTH
+    oh = round(h * ow / w) // 2 * 2
+    raw = subprocess.run(
+        [FFMPEG, "-v", "error", "-t", str(T_END), "-i", str(CLIP),
+         "-vf", f"scale={ow}:{oh}:flags=lanczos",
+         "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+        capture_output=True, check=True).stdout
+    stride = ow * oh * 3
+    n = len(raw) // stride
+    return [Image.frombytes("RGB", (ow, oh), raw[i * stride:(i + 1) * stride])
+            for i in range(n)], ow, oh
+
+
+def matte(im, sess, remove):
+    """isnet with the padding trick: bound the subject, matte, crop back."""
+    w, h = im.size
+    pw, ph = round(w * PAD), round(h * PAD)
+    big = im.resize((w + 2 * pw, h + 2 * ph), Image.LANCZOS).filter(
+        ImageFilter.GaussianBlur(40))
+    big.paste(im, (pw, ph))
+    cut = remove(big, session=sess)
+    return cut.crop((pw, ph, pw + w, ph + h))
+
+
+def edge_free(alpha, tol=40, margin=2, allow=800):
+    """True while the silhouette is essentially inside the frame.
+
+    `allow` is deliberately loose: at frame 0 one gladiolus tip grazes the
+    right edge for ~150px, which no eye reads as clipping — and the thin
+    spike contacts stay in the hundreds — while the frame where the mass
+    arrives jumps past 3000 border pixels at once."""
+    a = alpha > tol
+    touching = int(a[:margin].sum() + a[-margin:].sum()
+                   + a[:, :margin].sum() + a[:, -margin:].sum())
+    return touching <= allow
+
+
+def encode(im, q):
+    # method=4, measured: method=6 spends ~15s a frame inside libwebp's
+    # lossless alpha-plane search for ~4% fewer bytes. Not worth 25 minutes.
+    buf = io.BytesIO()
+    im.save(buf, "WEBP", quality=q, method=4)
+    return buf.getvalue()
 
 
 def main():
+    from rembg import remove, new_session
+    sess = new_session("isnet-general-use")
+
     if OUT.exists():
         shutil.rmtree(OUT)
     OUT.mkdir(parents=True)
 
-    parts, cut_at, total = [], 0.0, 0.0
-    for i, clip in enumerate(CLIPS):
-        src = MEDIA / clip
-        if not src.exists():
-            raise SystemExit(f"missing {src}")
-        w, h, dur = probe(src)
-        keep = dur - TRIM_HEAD - TRIM_TAIL
-        part = MEDIA / f"_trim{i}.mp4"
-        subprocess.run(
-            [FFMPEG, "-y", "-v", "error", "-ss", f"{TRIM_HEAD}", "-i", str(src),
-             "-t", f"{keep}", "-an", "-c", "copy", str(part)], check=True)
-        parts.append(part)
-        if i == 0:
-            cut_at = keep
-        total += keep
-        print(f"  {clip:10s} {w}x{h} {dur:.2f}s -> {keep:.2f}s")
+    # The mattes are the expensive part (~8 min); cache them at their own
+    # resolution and derive everything else cheaply. 960 wide covers any
+    # output width this script will be asked for.
+    cache = MEDIA / f"_mattes-{MATTES}x960"
+    if cache.exists() and len(list(cache.glob("m-*.png"))) == MATTES:
+        pool = [Image.open(cache / f"m-{i:03d}.png").convert("RGBA")
+                for i in range(MATTES)]
+        print(f"  mattes     {MATTES} frames from cache ({cache.name})")
+    else:
+        frames, w0, h0 = decode()
+        print(f"  decoded    {len(frames)} frames @ {w0}x{h0} from {CLIP.name} (0–{T_END}s)")
+        step = (len(frames) - 1) / (MATTES - 1)
+        picked = [frames[round(i * step)] for i in range(MATTES)]
+        pool = [matte(im, sess, remove) for im in picked]
+        cache.mkdir(parents=True, exist_ok=True)
+        for i, c in enumerate(pool):
+            c.save(cache / f"m-{i:03d}.png")
+        print(f"  matted     {len(pool)} frames (isnet, padded; cached)")
 
-    lst = MEDIA / "_concat.txt"
-    lst.write_text("".join(f"file '{p.resolve()}'\n" for p in parts), encoding="utf-8")
-    raw = MEDIA / "hero-raw.mp4"
-    subprocess.run([FFMPEG, "-y", "-v", "error", "-f", "concat", "-safe", "0",
-                    "-i", str(lst), "-c", "copy", str(raw)], check=True)
+    # Where does the whole-silhouette range end? Then sample it densely (the
+    # turn is watched closely) and the clipped tail sparsely (the dive is
+    # fast). This is what keeps 4+ seconds of footage inside the budget.
+    edge_ok = MATTES - 1
+    for i, c in enumerate(pool):
+        if not edge_free(np.asarray(c.split()[3])):
+            edge_ok = max(0, i - 1)
+            break
+    # The dive stops short of the clip's tail: past ~80% the arrangement fills
+    # the frame so completely that the matte keeps patches of studio grey
+    # between the blooms, and on white they read as dirt.
+    dive_end = min(MATTES - 1, round(MATTES * 0.80))
+    fl = [round(i * edge_ok / (FLOAT_N - 1)) for i in range(FLOAT_N)]
+    dv = [round(edge_ok + (j + 1) * (dive_end - edge_ok) / DIVE_N)
+          for j in range(DIVE_N)]
+    idxs = fl + dv
+    w, h = pool[0].size
+    if WIDTH < w:
+        cuts = [pool[i].resize((WIDTH, round(h * WIDTH / w)), Image.LANCZOS)
+                for i in idxs]
+    else:
+        cuts = [pool[i] for i in idxs]
+    w, h = cuts[0].size
+    print(f"  sampled    {FLOAT_N}+{DIVE_N} of {MATTES} (silhouette holds to {edge_ok})")
 
-    w, h, _ = probe(raw)
-    ow = WIDTH
-    oh = round(h * ow / w) // 2 * 2
-    mp4 = OUT / "hero.mp4"
-    subprocess.run(
-        [FFMPEG, "-y", "-v", "error", "-i", str(raw), "-an",
-         "-vf", f"scale={ow}:{oh}:flags=lanczos,fps={FPS}",
-         "-c:v", "libx264", "-profile:v", "high", "-crf", str(CRF),
-         "-preset", "veryslow", "-pix_fmt", "yuv420p",
-         "-x264-params", f"keyint={GOP}:min-keyint={GOP}:scenecut=0:bframes=0",
-         "-movflags", "+faststart", str(mp4)], check=True)
+    # Temporal 1-2-1 smoothing on alpha, then cleanup. The cleanup is what
+    # makes the files small: WebP stores alpha LOSSLESSLY, and this outline —
+    # hundreds of petal and stem edges — is the most expensive mask a florist
+    # could draw. Matte noise alone ballooned the raw sequence to 21MB; after
+    # de-noising, a multi-level feather still cost more than the photograph.
+    # So: hard floor, hard ceiling, ONE mid level for the 1px feather, and no
+    # colour under fully-transparent pixels.
+    alphas = [np.asarray(c.split()[3], dtype=np.uint16) for c in cuts]
+    cleaned = []
+    for i, c in enumerate(cuts):
+        a0 = alphas[max(0, i - 1)]
+        a2 = alphas[min(len(alphas) - 1, i + 1)]
+        a = ((a0 + 2 * alphas[i] + a2) // 4).astype(np.uint8)
+        a[a < 40] = 0
+        a[a > 215] = 255
+        # A mid-alpha pixel is either the 1px feather around a petal or a
+        # patch of faint background haze the matte half-kept. Snapping both to
+        # one level amplified the haze into visible grey blobs — so keep the
+        # mid level only within a few pixels of solid coverage (the feather)
+        # and drop the rest.
+        mid = (a > 0) & (a < 255)
+        near = np.asarray(Image.fromarray(((a == 255) * 255).astype(np.uint8))
+                          .filter(ImageFilter.MaxFilter(7))) > 0
+        a[mid & ~near] = 0
+        a[mid & near] = 128
+        rgba = np.asarray(c.convert("RGBA")).copy()
+        rgba[..., 3] = a
+        rgba[a == 0] = 0
+        cleaned.append(Image.fromarray(rgba, "RGBA"))
+    cuts = cleaned
 
-    # Stills: the first frame paints before the video has loaded, the last one
-    # sits under it so the reveal never flashes empty.
-    for name, at in (("poster", 0.0), ("tail", max(0.0, total - 0.12))):
-        png = OUT / f"_{name}.png"
-        subprocess.run([FFMPEG, "-y", "-v", "error", "-ss", f"{at}", "-i", str(mp4),
-                        "-frames:v", "1", str(png)], check=True)
-        Image.open(png).convert("RGB").save(OUT / f"{name}.webp", "WEBP",
-                                            quality=84, method=6)
-        png.unlink()
+    # Common crop: drop margins that are transparent in every frame.
+    union = np.zeros((h, w), bool)
+    for c in cuts:
+        union |= np.asarray(c.split()[3]) > 10
+    ys, xs = np.where(union)
+    x0 = max(0, xs.min() - 6); x1 = min(w, xs.max() + 7)
+    y0 = max(0, ys.min() - 6); y1 = min(h, ys.max() + 7)
+    x1 -= (x1 - x0) % 2; y1 -= (y1 - y0) % 2
+    cuts = [c.crop((x0, y0, x1, y1)) for c in cuts]
+    cw, ch = cuts[0].size
+    print(f"  cropped    {cw}x{ch}")
 
-    for p in parts:
-        p.unlink(missing_ok=True)
-    lst.unlink(missing_ok=True)
+    # The float/dive boundary is known by construction: the last float frame.
+    safe = FLOAT_N - 1
 
-    dur = probe(mp4)[2]
+    # Pick q from a 10-frame sample first, then encode the set once — the
+    # full-set ladder re-encoded 92 frames per step and took most of an hour.
+    sample = cuts[:: max(1, len(cuts) // 10)]
+    q = Q_START
+    while q > 56:
+        est = sum(len(encode(c, q)) for c in sample) / len(sample) * len(cuts) / 1024
+        if est <= BUDGET_KB:
+            break
+        q -= 4
+    # Dive frames are shown scaled well past 1x — they carry more quality.
+    blobs = [encode(c, q + (10 if i > safe else 0)) for i, c in enumerate(cuts)]
+    total = sum(len(b) for b in blobs) / 1024
+    for i, b in enumerate(blobs):
+        (OUT / f"f-{i:03d}.webp").write_bytes(b)
+
+    cuts[0].save(OUT / "poster.webp", "WEBP", quality=82, method=6)
+
     (ROOT / "js" / "hero-manifest.js").write_text(
         "// generated by scripts/build_hero.py — do not edit\n"
         "export const HERO = " + json.dumps({
-            "src": "assets/hero/hero.mp4",
+            "count": len(cuts), "w": cw, "h": ch, "safe": safe,
+            "path": "assets/hero/f-", "ext": ".webp",
             "poster": "assets/hero/poster.webp",
-            "tail": "assets/hero/tail.webp",
-            "w": ow, "h": oh, "fps": FPS,
-            "duration": round(dur, 2),
-            "cut": round(cut_at, 2),
         }, indent=1) + ";\n", encoding="utf-8")
 
-    mb = os.path.getsize(mp4) / 1048576
-    print(f"\n  hero.mp4     {ow}x{oh} @ {FPS}fps  {dur:.2f}s  {mb:.2f}MB  "
-          f"({round(dur * FPS)} frames, keyint {GOP})")
-    print(f"  poster.webp  {os.path.getsize(OUT / 'poster.webp') / 1024:.0f}KB")
-    print(f"  cut at       {cut_at:.2f}s")
+    print(f"\n  sequence   {len(cuts)} frames  q={q}  {total:.0f}KB "
+          f"({total / len(cuts):.1f}KB avg)")
+    print(f"  poster     {(OUT / 'poster.webp').stat().st_size / 1024:.0f}KB")
 
 
 if __name__ == "__main__":

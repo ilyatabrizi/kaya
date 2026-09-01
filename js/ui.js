@@ -1,7 +1,7 @@
 // Shared pieces every view builds from: the photo element, the product card,
 // the bottom sheet, the toast, the footer.
 
-import { el, money, clamp } from './util.js';
+import { el, money, clamp, prettyPhone } from './util.js';
 import { icon } from './icons.js';
 import { PHOTOS } from './photos.js';
 import { BRAND } from './config.js';
@@ -93,13 +93,13 @@ export function productCard(p, { wide = false, sizes } = {}) {
   a.append(ph);
 
   if (p.tag || out) {
-    a.append(el('span', { class: 'card__tag', text: out ? 'موجود نیست' : p.tag }));
+    a.append(el('span', { class: 'card__tag', text: out ? 'Out of stock' : p.tag }));
   }
 
   const fav = el('button', {
     class: 'card__fav' + (isFav(p.slug) ? ' is-on' : ''),
     type: 'button',
-    'aria-label': 'افزودن به علاقه‌مندی‌ها',
+    'aria-label': 'Save to favourites',
     'aria-pressed': isFav(p.slug) ? 'true' : 'false',
     html: icon('heart'),
     onclick: (e) => {
@@ -107,7 +107,7 @@ export function productCard(p, { wide = false, sizes } = {}) {
       const on = toggleFav(p.slug);
       fav.classList.toggle('is-on', on);
       fav.setAttribute('aria-pressed', on ? 'true' : 'false');
-      toast(on ? 'به علاقه‌مندی‌ها اضافه شد' : 'از علاقه‌مندی‌ها حذف شد');
+      toast(on ? 'Saved to favourites' : 'Removed from favourites');
     },
   });
   a.append(fav);
@@ -235,12 +235,12 @@ export function qtyControl(value, onChange) {
   const b = el('b', { text: String(value) });
   const box = el('div', { class: 'qty' },
     el('button', {
-      type: 'button', 'aria-label': 'کم کردن', html: icon('minus'),
+      type: 'button', 'aria-label': 'Fewer', html: icon('minus'),
       onclick: () => onChange(clamp(Number(b.textContent) - 1, 0, 99)),
     }),
     b,
     el('button', {
-      type: 'button', 'aria-label': 'اضافه کردن', html: icon('plus'),
+      type: 'button', 'aria-label': 'More', html: icon('plus'),
       onclick: () => onChange(clamp(Number(b.textContent) + 1, 0, 99)),
     }),
   );
@@ -255,36 +255,36 @@ export function footer() {
   const about = el('div', {});
   about.append(brandEl('word', 'foot__brand'));
   about.append(el('p', {
-    text: `آتلیه گل‌آرایی کایا — ${BRAND.address}. باکس و گلدان، دسته‌گل، استند تبریک و سفارش اختصاصی، با ارسال در تبریز.`,
+    text: `KAYA flower atelier — ${BRAND.address}. Boxes and vases, bouquets, congratulation stands and bespoke arrangements, delivered across Tabriz.`,
   }));
 
   const contact = el('div', {},
-    el('h4', { text: 'تماس' }),
+    el('h4', { text: 'Contact' }),
     el('ul', {},
       ...BRAND.phones.map((p) => el('li', {},
-        el('a', { href: 'tel:' + p, dir: 'ltr', class: 'lat', text: p }))),
+        el('a', { href: 'tel:' + p, text: prettyPhone(p) }))),
       el('li', {}, el('a', {
         href: BRAND.instagramUrl, target: '_blank', rel: 'noopener',
-        dir: 'ltr', class: 'lat', text: '@' + BRAND.instagram,
+        text: '@' + BRAND.instagram,
       })),
     ),
   );
 
   const links = el('div', {},
-    el('h4', { text: 'کایا' }),
+    el('h4', { text: 'KAYA' }),
     el('ul', {},
-      el('li', {}, el('a', { href: '#/shop', text: 'گل‌ها' })),
-      el('li', {}, el('a', { href: '#/custom', text: 'سفارش اختصاصی' })),
-      el('li', {}, el('a', { href: '#/about', text: 'درباره و تماس' })),
-      el('li', {}, el('a', { href: '#/orders', text: 'پیگیری سفارش' })),
+      el('li', {}, el('a', { href: '#/shop', text: 'Shop' })),
+      el('li', {}, el('a', { href: '#/custom', text: 'Bespoke orders' })),
+      el('li', {}, el('a', { href: '#/about', text: 'About & contact' })),
+      el('li', {}, el('a', { href: '#/orders', text: 'Track an order' })),
     ),
   );
 
   grid.append(about, contact, links);
   f.append(el('div', { class: 'wrap' }, grid,
     el('div', { class: 'foot__legal' },
-      el('span', { text: `© ${new Date().getFullYear()} KAYA · تبریز` }),
-      el('a', { href: '#/crm', text: 'ورود کارکنان' }),
+      el('span', { text: `© ${new Date().getFullYear()} KAYA · Tabriz` }),
+      el('a', { href: '#/crm', text: 'Staff access' }),
     ),
   ));
   return f;

@@ -103,11 +103,11 @@ export function setStatus(orderId, status) {
 }
 
 export const STATUS = {
-  new: { name: 'ثبت شد', s: 'new' },
-  prep: { name: 'در حال آماده‌سازی', s: 'prep' },
-  out: { name: 'در مسیر', s: 'out' },
-  done: { name: 'تحویل شد', s: 'done' },
-  cancel: { name: 'لغو شد', s: 'cancel' },
+  new: { name: 'Placed', s: 'new' },
+  prep: { name: 'Preparing', s: 'prep' },
+  out: { name: 'On the way', s: 'out' },
+  done: { name: 'Delivered', s: 'done' },
+  cancel: { name: 'Cancelled', s: 'cancel' },
 };
 
 /* -------------------------------------------------------------- profile */
@@ -174,27 +174,27 @@ function seed(s) {
   s.orders = [
     mk({
       ago: 0.6 * H, status: 'new',
-      buyer: { name: 'سارا مهدوی', phone: '09145550132' },
-      recipient: { name: 'الهام رستمی', phone: '09355550187', address: 'تبریز، ولیعصر، برج بلور، طبقه ۷' },
-      items: [{ slug: 'arghavan', name: 'ارغوان', size: 'm', qty: 1, price: 6960000 }],
+      buyer: { name: 'Sara Mahdavi', phone: '09145550132' },
+      recipient: { name: 'Elham Rostami', phone: '09355550187', address: 'Bolour Tower, Fl 7, Valiasr, Tabriz' },
+      items: [{ slug: 'arghavan', name: 'Arghavan', size: 'm', qty: 1, price: 6960000 }],
       total: 7050000,
-      delivery: { zone: 'central', date: Date.now() + 4 * H, slot: '۱۵ تا ۱۸', fee: 90000 },
+      delivery: { zone: 'central', date: Date.now() + 4 * H, slot: '15–18', fee: 90000 },
     }),
     mk({
       ago: 5 * H, status: 'out',
-      buyer: { name: 'بهنام آذری', phone: '09141110098' },
-      recipient: { name: 'دفتر مرکزی آرتان', phone: '04133445566', address: 'تبریز، آبرسان، ساختمان نگین، واحد ۲' },
-      items: [{ slug: 'banafsheh', name: 'بنفشه', size: 'l', qty: 1, price: 13440000 }],
+      buyer: { name: 'Behnam Azari', phone: '09141110098' },
+      recipient: { name: 'Artan HQ', phone: '04133445566', address: 'Negin Building, Unit 2, Abrasan, Tabriz' },
+      items: [{ slug: 'banafsheh', name: 'Banafsheh', size: 'l', qty: 1, price: 13440000 }],
       total: 13590000,
-      delivery: { zone: 'wide', date: Date.now() + 1 * H, slot: '۱۲ تا ۱۵', fee: 150000 },
+      delivery: { zone: 'wide', date: Date.now() + 1 * H, slot: '12–15', fee: 150000 },
     }),
     mk({
       ago: 30 * H, status: 'done',
-      buyer: { name: 'سارا مهدوی', phone: '09145550132' },
-      recipient: { name: 'خودم', phone: '09145550132', address: 'تبریز، ائل‌گلی، کوی فردوس' },
-      items: [{ slug: 'shahd', name: 'شهد', size: 's', qty: 2, price: 1980000 }],
+      buyer: { name: 'Sara Mahdavi', phone: '09145550132' },
+      recipient: { name: 'Myself', phone: '09145550132', address: 'Ferdows Lane, El Goli, Tabriz' },
+      items: [{ slug: 'shahd', name: 'Shahd', size: 's', qty: 2, price: 1980000 }],
       total: 4050000,
-      delivery: { zone: 'central', date: Date.now() - 26 * H, slot: '۹ تا ۱۲', fee: 90000 },
+      delivery: { zone: 'central', date: Date.now() - 26 * H, slot: '9–12', fee: 90000 },
     }),
   ];
   return s;

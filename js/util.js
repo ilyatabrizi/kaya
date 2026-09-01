@@ -30,44 +30,39 @@ export function clear(node) {
 }
 
 /* ----------------------------------------------------------------- money */
-// IRANYekanXFaNum renders Latin digit keystrokes as ۰–۹ itself. Converting in
-// JS as well would double-convert and produce tofu, so every number in this
-// app is written with Latin digits and left alone.
 export const toman = (n) => Math.round(n).toLocaleString('en-US');
 
-export const money = (n) => `${toman(n)} تومان`;
+export const money = (n) => `${toman(n)} Toman`;
 
 /* ------------------------------------------------------------------ time */
-const FA_DATE = new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
+const D_LONG = new Intl.DateTimeFormat('en-US', {
   day: 'numeric', month: 'long', year: 'numeric',
 });
-const FA_SHORT = new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
-  day: 'numeric', month: 'long',
-});
-const FA_WEEK = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { weekday: 'long' });
+const D_SHORT = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+const D_WEEK = new Intl.DateTimeFormat('en-US', { weekday: 'long' });
 
-export const faDate = (d) => FA_DATE.format(d instanceof Date ? d : new Date(d));
-export const faShort = (d) => FA_SHORT.format(d instanceof Date ? d : new Date(d));
-export const faWeek = (d) => FA_WEEK.format(d instanceof Date ? d : new Date(d));
+export const dateLong = (d) => D_LONG.format(d instanceof Date ? d : new Date(d));
+export const dateShort = (d) => D_SHORT.format(d instanceof Date ? d : new Date(d));
+export const weekday = (d) => D_WEEK.format(d instanceof Date ? d : new Date(d));
 
-export function faDateTime(d) {
+export function dateTime(d) {
   const dt = d instanceof Date ? d : new Date(d);
-  const t = new Intl.DateTimeFormat('fa-IR', {
+  const t = new Intl.DateTimeFormat('en-GB', {
     hour: '2-digit', minute: '2-digit', hour12: false,
   }).format(dt);
-  return `${faShort(dt)} · ساعت ${t}`;
+  return `${dateShort(dt)} · ${t}`;
 }
 
 export function relative(d) {
   const dt = d instanceof Date ? d : new Date(d);
   const mins = Math.round((Date.now() - dt.getTime()) / 60000);
-  if (mins < 1) return 'همین حالا';
-  if (mins < 60) return `${mins} دقیقه پیش`;
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
   const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `${hrs} ساعت پیش`;
+  if (hrs < 24) return `${hrs} h ago`;
   const days = Math.round(hrs / 24);
-  if (days < 30) return `${days} روز پیش`;
-  return faShort(dt);
+  if (days < 30) return `${days} d ago`;
+  return dateShort(dt);
 }
 
 /* --------------------------------------------------------------- strings */
@@ -87,7 +82,7 @@ export function validPhone(v) {
 
 export const telHref = (p) => 'tel:' + String(p).replace(/[^\d+]/g, '');
 
-// Persian phone display: 0930 880 5590
+// Phone display: 0930 880 5590
 export function prettyPhone(p) {
   const s = String(p).replace(/\D/g, '');
   return s.length === 11 ? `${s.slice(0, 4)} ${s.slice(4, 7)} ${s.slice(7)}` : s;

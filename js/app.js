@@ -28,11 +28,11 @@ route('/crm', () => import('./views/crm.js').then((m) => m.default));
 
 /* ---------------------------------------------------------------- the tabs */
 const TABS = [
-  { to: '/', ic: 'home', name: 'خانه' },
-  { to: '/shop', ic: 'flower', name: 'گل‌ها' },
-  { to: '/custom', ic: 'spark', name: 'سفارشی' },
-  { to: '/bag', ic: 'bag', name: 'سبد', badge: true },
-  { to: '/account', ic: 'user', name: 'من' },
+  { to: '/', ic: 'home', name: 'Home' },
+  { to: '/shop', ic: 'flower', name: 'Shop' },
+  { to: '/custom', ic: 'spark', name: 'Bespoke' },
+  { to: '/bag', ic: 'bag', name: 'Bag', badge: true },
+  { to: '/account', ic: 'user', name: 'Profile' },
 ];
 
 const pill = el('span', { class: 'tabbar__pill' });
@@ -61,10 +61,8 @@ function movePill(i) {
   pill.style.opacity = '1';
   const box = tabbar.getBoundingClientRect();
   const cell = a.getBoundingClientRect();
-  // RTL: measure from the container's start edge in the writing direction.
-  const from = box.right - cell.right;
   pill.style.width = `${cell.width}px`;
-  pill.style.transform = `translateX(${-from}px)`;
+  pill.style.transform = `translateX(${cell.left - box.left}px)`;
 }
 
 function paintBadges() {
@@ -81,9 +79,9 @@ function paintBadges() {
 
 /* -------------------------------------------------------------- the topbar */
 const TOPLINKS = [
-  { to: '/shop', name: 'گل‌ها' },
-  { to: '/custom', name: 'سفارش اختصاصی' },
-  { to: '/about', name: 'درباره و تماس' },
+  { to: '/shop', name: 'Shop' },
+  { to: '/custom', name: 'Bespoke' },
+  { to: '/about', name: 'About & contact' },
 ];
 
 function buildTopbar() {
@@ -92,11 +90,11 @@ function buildTopbar() {
   TOPLINKS.forEach((l) => links.append(el('a', { href: '#' + l.to, text: l.name })));
   const acts = topbar.querySelector('.topbar__acts');
   acts.append(el('a', {
-    class: 'iconbtn', href: '#/bag', 'aria-label': 'سبد',
+    class: 'iconbtn', href: '#/bag', 'aria-label': 'Bag',
   }, el('span', { html: icon('bag'), style: { display: 'contents' } }),
      el('span', { class: 'iconbtn__dot', hidden: true })));
   acts.append(el('a', {
-    class: 'iconbtn', href: '#/account', 'aria-label': 'حساب من',
+    class: 'iconbtn', href: '#/account', 'aria-label': 'Profile',
     html: icon('user'),
   }));
   topbar.hidden = false;
@@ -170,15 +168,15 @@ onRoute((r, view) => {
 
 function titleFor(r) {
   const map = {
-    '/': 'KAYA — گل‌آرایی، تبریز',
-    '/shop': 'گل‌ها — KAYA',
-    '/custom': 'سفارش اختصاصی — KAYA',
-    '/bag': 'سبد — KAYA',
-    '/checkout': 'تحویل — KAYA',
-    '/orders': 'سفارش‌های من — KAYA',
-    '/account': 'حساب من — KAYA',
-    '/about': 'درباره کایا — KAYA',
-    '/crm': 'پنل آتلیه — KAYA',
+    '/': 'KAYA — Flower Atelier, Tabriz',
+    '/shop': 'The pieces — KAYA',
+    '/custom': 'Bespoke — KAYA',
+    '/bag': 'Bag — KAYA',
+    '/checkout': 'Delivery — KAYA',
+    '/orders': 'My orders — KAYA',
+    '/account': 'Profile — KAYA',
+    '/about': 'About — KAYA',
+    '/crm': 'Studio — KAYA',
   };
   return map[r.pattern] || 'KAYA';
 }
