@@ -1,0 +1,8 @@
+.DS_Store
+media/*.mp4
+media/*.json
+media/*.err
+scripts/src/*.png
+scripts/src/*.jpg
+scripts/_*.html
+__pycache__/

@@ -1,0 +1,71 @@
+<!doctype html>
+<html dir="rtl" lang="fa">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>KAYA — گل‌آرایی، تبریز</title>
+<meta name="description" content="کایا، آتلیه گل‌آرایی در تبریز. باکس و گلدان، دسته‌گل، استند تبریک و سفارش اختصاصی — با ارسال در تبریز.">
+<meta name="theme-color" content="#FFFFFF">
+<meta name="color-scheme" content="light">
+
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icons/favicon-64.png" sizes="64x64">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="KAYA">
+<meta name="mobile-web-app-capable" content="yes">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="KAYA — گل‌آرایی، تبریز">
+<meta property="og:description" content="آتلیه گل‌آرایی کایا — تبریز، ولیعصر.">
+<meta property="og:image" content="assets/brand/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="preload" href="assets/fonts/IRANYekanXFaNum-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/IRANYekanXFaNum-Medium.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/hero/poster.webp" as="image" fetchpriority="high">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<a class="skip" href="#main">رفتن به محتوا</a>
+
+<!-- Painted before any script runs: the mark, centred on white. The app
+     replaces it on boot; if the app never boots, this is still a brand page. -->
+<div id="boot" class="boot" aria-hidden="true">
+  <div class="boot__mark"></div>
+</div>
+
+<header id="topbar" class="topbar" hidden>
+  <div class="topbar__in">
+    <a class="topbar__brand" href="#/" aria-label="کایا — خانه"></a>
+    <nav class="topbar__links" aria-label="پیمایش اصلی"></nav>
+    <div class="topbar__acts"></div>
+  </div>
+</header>
+
+<main id="main" class="main" tabindex="-1"></main>
+
+<nav id="tabbar" class="tabbar glass" aria-label="پیمایش" hidden></nav>
+
+<div id="sheet" class="sheet" hidden>
+  <div class="sheet__scrim" data-close></div>
+  <div class="sheet__panel" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+    <button class="sheet__grip" data-close aria-label="بستن"></button>
+    <div class="sheet__body"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<noscript>
+  <div class="noscript">
+    برای دیدن این صفحه باید جاوااسکریپت روشن باشد.
+    تماس با کایا: <span dir="ltr">۰۹۳۰ ۸۸۰ ۵۵۹۰</span>
+  </div>
+</noscript>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

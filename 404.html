@@ -1,0 +1,16 @@
+<!doctype html>
+<html dir="rtl" lang="fa"><head><meta charset="utf-8">
+<title>KAYA</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<script>
+/* GitHub Pages has no rewrite rules. Anything that is not a real file lands
+   here; send it back to the app, keeping the path as a hash so a shared link
+   like /kaya/p/aftab still opens the right page. */
+(function () {
+  var base = location.pathname.replace(/\/[^/]*$/, '/');
+  var seg = location.pathname.slice(base.length);
+  location.replace(base + (seg ? '#/' + seg.replace(/^\/+/, '') : '') + location.search);
+})();
+</script>
+<style>body{margin:0;background:#fff}</style>
+</head><body></body></html>

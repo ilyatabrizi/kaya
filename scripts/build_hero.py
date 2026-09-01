@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+"""Cut the two Higgsfield clips into the scroll-scrubbed hero video.
+
+The first build of this shipped a WebP frame sequence, on the theory that
+seeking a <video> is unreliable on iOS. Measured, that theory was expensive:
+the footage is dense floral macro with no flat areas, so WebP could not get
+below ~45KB a frame, and 96 frames — already coarse enough to step visibly
+under a finger — cost 4.3MB. The same twelve seconds as H.264 costs 1.7MB and
+carries 193 frames, because inter-frame prediction is exactly the thing dense
+similar frames reward.
+
+So it is a video, encoded for seeking rather than for playback:
+
+  keyint=8      a keyframe every half second, so any seek decodes at most
+                seven frames to get where it is going
+  bframes=0     no out-of-order frames, so a seek lands on the frame asked for
+  fps=16        the scrubber sets the pace, not the clock; 16 is smooth under a
+                finger and saves a third over 24
+  faststart     moov atom first, so it starts serving before it has all arrived
+
+The cut is a match cut: A pushes into the blooms, B starts inside them and
+drifts back out until the KAYA ribbon lands on the last frame.
+
+Out:
+  assets/hero/hero.mp4       the scrub track
+  assets/hero/poster.webp    frame 0 — the LCP image, on screen before the video
+  assets/hero/tail.webp      last frame, held under the video while it seeks
+  js/hero-manifest.js        duration, dimensions, the cut point
+
+    python3 scripts/build_hero.py
+
+Needs imageio-ffmpeg (bundles a static ffmpeg) and Pillow.
+"""
+
+import json
+import os
+import pathlib
+import re
+import shutil
+import subprocess
+
+import imageio_ffmpeg
+from PIL import Image
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+MEDIA = ROOT / "media"
+OUT = ROOT / "assets" / "hero"
+
+CLIPS = ["clipA.mp4", "clipB.mp4"]
+WIDTH = 672          # ~2x the framed window on desktop, ~2x full-bleed on a phone
+FPS = 16
+CRF = 29
+GOP = 8
+FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
+
+# Each clip holds still for a few frames at its ends. Trim them so the join
+# lands on movement and the scrub never feels stuck.
+TRIM_HEAD = 0.10     # seconds
+TRIM_TAIL = 0.14
+
+
+def probe(path):
+    out = subprocess.run([FFMPEG, "-i", str(path)], capture_output=True, text=True).stderr
+    line = next((l for l in out.splitlines() if "Stream" in l and "Video:" in l), "")
+    m = re.search(r"\b(\d{2,5})x(\d{2,5})\b", line)
+    d = re.search(r"Duration: (\d+):(\d+):([\d.]+)", out)
+    if not m or not d:
+        raise SystemExit(f"could not probe {path.name}")
+    dur = int(d.group(1)) * 3600 + int(d.group(2)) * 60 + float(d.group(3))
+    return int(m.group(1)), int(m.group(2)), dur
+
+
+def main():
+    if OUT.exists():
+        shutil.rmtree(OUT)
+    OUT.mkdir(parents=True)
+
+    parts, cut_at, total = [], 0.0, 0.0
+    for i, clip in enumerate(CLIPS):
+        src = MEDIA / clip
+        if not src.exists():
+            raise SystemExit(f"missing {src}")
+        w, h, dur = probe(src)
+        keep = dur - TRIM_HEAD - TRIM_TAIL
+        part = MEDIA / f"_trim{i}.mp4"
+        subprocess.run(
+            [FFMPEG, "-y", "-v", "error", "-ss", f"{TRIM_HEAD}", "-i", str(src),
+             "-t", f"{keep}", "-an", "-c", "copy", str(part)], check=True)
+        parts.append(part)
+        if i == 0:
+            cut_at = keep
+        total += keep
+        print(f"  {clip:10s} {w}x{h} {dur:.2f}s -> {keep:.2f}s")
+
+    lst = MEDIA / "_concat.txt"
+    lst.write_text("".join(f"file '{p.resolve()}'\n" for p in parts), encoding="utf-8")
+    raw = MEDIA / "hero-raw.mp4"
+    subprocess.run([FFMPEG, "-y", "-v", "error", "-f", "concat", "-safe", "0",
+                    "-i", str(lst), "-c", "copy", str(raw)], check=True)
+
+    w, h, _ = probe(raw)
+    ow = WIDTH
+    oh = round(h * ow / w) // 2 * 2
+    mp4 = OUT / "hero.mp4"
+    subprocess.run(
+        [FFMPEG, "-y", "-v", "error", "-i", str(raw), "-an",
+         "-vf", f"scale={ow}:{oh}:flags=lanczos,fps={FPS}",
+         "-c:v", "libx264", "-profile:v", "high", "-crf", str(CRF),
+         "-preset", "veryslow", "-pix_fmt", "yuv420p",
+         "-x264-params", f"keyint={GOP}:min-keyint={GOP}:scenecut=0:bframes=0",
+         "-movflags", "+faststart", str(mp4)], check=True)
+
+    # Stills: the first frame paints before the video has loaded, the last one
+    # sits under it so the reveal never flashes empty.
+    for name, at in (("poster", 0.0), ("tail", max(0.0, total - 0.12))):
+        png = OUT / f"_{name}.png"
+        subprocess.run([FFMPEG, "-y", "-v", "error", "-ss", f"{at}", "-i", str(mp4),
+                        "-frames:v", "1", str(png)], check=True)
+        Image.open(png).convert("RGB").save(OUT / f"{name}.webp", "WEBP",
+                                            quality=84, method=6)
+        png.unlink()
+
+    for p in parts:
+        p.unlink(missing_ok=True)
+    lst.unlink(missing_ok=True)
+
+    dur = probe(mp4)[2]
+    (ROOT / "js" / "hero-manifest.js").write_text(
+        "// generated by scripts/build_hero.py — do not edit\n"
+        "export const HERO = " + json.dumps({
+            "src": "assets/hero/hero.mp4",
+            "poster": "assets/hero/poster.webp",
+            "tail": "assets/hero/tail.webp",
+            "w": ow, "h": oh, "fps": FPS,
+            "duration": round(dur, 2),
+            "cut": round(cut_at, 2),
+        }, indent=1) + ";\n", encoding="utf-8")
+
+    mb = os.path.getsize(mp4) / 1048576
+    print(f"\n  hero.mp4     {ow}x{oh} @ {FPS}fps  {dur:.2f}s  {mb:.2f}MB  "
+          f"({round(dur * FPS)} frames, keyint {GOP})")
+    print(f"  poster.webp  {os.path.getsize(OUT / 'poster.webp') / 1024:.0f}KB")
+    print(f"  cut at       {cut_at:.2f}s")
+
+
+if __name__ == "__main__":
+    main()
