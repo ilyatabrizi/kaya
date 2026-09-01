@@ -6,3 +6,4 @@ scripts/src/*.png
 scripts/src/*.jpg
 scripts/_*.html
 __pycache__/
+media/_mattes-*/
