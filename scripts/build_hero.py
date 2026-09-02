@@ -1,35 +1,31 @@
 #!/usr/bin/env python3
-"""Cut the arrangement out of the Higgsfield clip, frame by frame, into the
+"""Cut the arrangement out of the orbit clip, frame by frame, into the
 transparent sequence the hero scrubs.
 
-The client's call: the hero must not read as a video. No window, no
-photographic background — the arrangement itself, floating on the white page,
-turning and closing in as you scroll. So the presentation is a cutout: every
-frame of clip A matted against its studio background, cropped, and shipped as
-WebP with alpha, drawn to a canvas by the scrubber.
+The hero must not read as a video: no window, no photographic background — the
+arrangement itself, floating on the white page, turning as you scroll. v3 works
+from footage generated for exactly that: a locked-distance orbit with the whole
+piece inside the frame the entire time. That kills the two hacks v2 needed
+(the "safe" boundary and the dive into edge-clipped frames) and lets every
+frame ship whole, high-res, and uniformly sampled.
 
 Matting is isnet-general-use (rembg). Two things make it hold up:
 
-  * Padding. The model is trained on bounded subjects; the moment the blooms
-    touch the frame edge it starts dissolving them. Extending each frame with
-    a blurred stretch of its own background before matting — and cropping the
-    matte back — keeps the subject bounded and rescues the whole clip.
-  * Temporal smoothing. The matte is computed per frame, so fine spikes
-    shimmer. A 1-2-1 blend of each alpha with its neighbours damps it; the
-    footage moves slowly enough that nothing smears.
-
-The scrub has two phases and the manifest records the boundary:
-
-  frames [0 .. safe]        the whole silhouette is inside the frame — the
-                            floating-object phase
-  frames (safe .. count-1]  the blooms clip the frame edges — usable only once
-                            the page has zoomed past the object's own bounds,
-                            which is exactly when the scrub uses them
+  * Padding. The model is trained on bounded subjects; if anything approaches
+    the frame edge it starts dissolving. Extending each frame with a blurred
+    stretch of its own background before matting — and cropping the matte
+    back — keeps the subject bounded everywhere.
+  * Alpha cleanup. WebP stores alpha losslessly and this outline — hundreds of
+    petal and stem edges — is the most expensive mask a florist could draw.
+    After a 1-2-1 temporal blend: hard floor, hard ceiling, ONE mid level for
+    the 1px feather kept only within 3px of solid coverage (anything further
+    out is background haze, and haze amplified to 50% grey is how v2 grew
+    blobs), and no colour under fully-transparent pixels.
 
 Out:
   assets/hero/f-000.webp …   the sequence (RGBA)
   assets/hero/poster.webp    frame 0 — the LCP image
-  js/hero-manifest.js        count, size, the safe index
+  js/hero-manifest.js        count and size
 
     python3 scripts/build_hero.py
 
@@ -51,34 +47,44 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 MEDIA = ROOT / "media"
 OUT = ROOT / "assets" / "hero"
 
-CLIP = MEDIA / "clipA.mp4"
-T_END = 4.35         # seconds of the clip worth using (later, blooms swallow the frame)
-MATTES = 92          # how many frames get matted (and cached) across T_END
-FLOAT_N = 40         # frames sampled inside the whole-silhouette range
-DIVE_N = 14          # frames sampled after it — the dive moves fast, it needs fewer
-WIDTH = 720
-BUDGET_KB = 2600
-Q_START = 62
-PAD = 0.22           # matting context border, fraction of each side
+CLIP = MEDIA / "orbit.mp4"
+MODEL = "isnet-general-use"
+FRAMES = 64
+WIDTH = 1000         # from a 1080 source — the zoom now reads source pixels,
+                     # so resolution here is what the dive's sharpness is made of
+BUDGET_KB = 4300
+Q_START = 70
+PAD = 0.20           # matting context border, fraction of each side
+TRIM_HEAD = 0.55     # the raw start pose carries the photo's own floor shadow
+TRIM_TAIL = 0.15     # the clip holds its last pose for a beat
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
 
 
-def decode():
-    probe = subprocess.run([FFMPEG, "-i", str(CLIP)], capture_output=True, text=True).stderr
-    line = next((l for l in probe.splitlines() if "Stream" in l and "Video:" in l), "")
+def probe(path):
+    out = subprocess.run([FFMPEG, "-i", str(path)], capture_output=True, text=True).stderr
+    line = next((l for l in out.splitlines() if "Stream" in l and "Video:" in l), "")
     m = re.search(r"\b(\d{2,5})x(\d{2,5})\b", line)
-    w, h = int(m.group(1)), int(m.group(2))
-    ow = WIDTH
-    oh = round(h * ow / w) // 2 * 2
+    d = re.search(r"Duration: (\d+):(\d+):([\d.]+)", out)
+    if not m or not d:
+        raise SystemExit(f"could not probe {path.name}")
+    dur = int(d.group(1)) * 3600 + int(d.group(2)) * 60 + float(d.group(3))
+    return int(m.group(1)), int(m.group(2)), dur
+
+
+def decode(n):
+    """n frames, evenly spaced across the clip, at source resolution."""
+    w, h, dur = probe(CLIP)
+    keep = dur - TRIM_HEAD - TRIM_TAIL
     raw = subprocess.run(
-        [FFMPEG, "-v", "error", "-t", str(T_END), "-i", str(CLIP),
-         "-vf", f"scale={ow}:{oh}:flags=lanczos",
-         "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+        [FFMPEG, "-v", "error", "-ss", f"{TRIM_HEAD}", "-t", f"{keep}",
+         "-i", str(CLIP), "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
         capture_output=True, check=True).stdout
-    stride = ow * oh * 3
-    n = len(raw) // stride
-    return [Image.frombytes("RGB", (ow, oh), raw[i * stride:(i + 1) * stride])
-            for i in range(n)], ow, oh
+    stride = w * h * 3
+    total = len(raw) // stride
+    step = (total - 1) / (n - 1)
+    return [Image.frombytes("RGB", (w, h), raw[round(i * step) * stride:
+                                               (round(i * step) + 1) * stride])
+            for i in range(n)], w, h
 
 
 def matte(im, sess, remove):
@@ -92,22 +98,9 @@ def matte(im, sess, remove):
     return cut.crop((pw, ph, pw + w, ph + h))
 
 
-def edge_free(alpha, tol=40, margin=2, allow=800):
-    """True while the silhouette is essentially inside the frame.
-
-    `allow` is deliberately loose: at frame 0 one gladiolus tip grazes the
-    right edge for ~150px, which no eye reads as clipping — and the thin
-    spike contacts stay in the hundreds — while the frame where the mass
-    arrives jumps past 3000 border pixels at once."""
-    a = alpha > tol
-    touching = int(a[:margin].sum() + a[-margin:].sum()
-                   + a[:, :margin].sum() + a[:, -margin:].sum())
-    return touching <= allow
-
-
 def encode(im, q):
-    # method=4, measured: method=6 spends ~15s a frame inside libwebp's
-    # lossless alpha-plane search for ~4% fewer bytes. Not worth 25 minutes.
+    # method=4: method=6 spends ~15s a frame inside libwebp's lossless
+    # alpha-plane search for ~4% fewer bytes.
     buf = io.BytesIO()
     im.save(buf, "WEBP", quality=q, method=4)
     return buf.getvalue()
@@ -115,86 +108,92 @@ def encode(im, q):
 
 def main():
     from rembg import remove, new_session
-    sess = new_session("isnet-general-use")
 
+    if not CLIP.exists():
+        raise SystemExit(f"missing {CLIP}")
     if OUT.exists():
         shutil.rmtree(OUT)
     OUT.mkdir(parents=True)
 
-    # The mattes are the expensive part (~8 min); cache them at their own
-    # resolution and derive everything else cheaply. 960 wide covers any
-    # output width this script will be asked for.
-    cache = MEDIA / f"_mattes-{MATTES}x960"
-    if cache.exists() and len(list(cache.glob("m-*.png"))) == MATTES:
-        pool = [Image.open(cache / f"m-{i:03d}.png").convert("RGBA")
-                for i in range(MATTES)]
-        print(f"  mattes     {MATTES} frames from cache ({cache.name})")
+    # The originals are always needed: rembg zeroes the colour under deleted
+    # pixels, so anything the matte wrongly removed — the white satin ribbon,
+    # every time — can only be restored from the source frames.
+    picked, w0, h0 = decode(FRAMES)
+    print(f"  decoded    {FRAMES} frames @ {w0}x{h0} from {CLIP.name} "
+          f"({TRIM_HEAD}s–end)")
+
+    # The mattes are the expensive part; cache them per clip and trim.
+    cache = MEDIA / f"_mattes-{CLIP.stem}-{FRAMES}-t{TRIM_HEAD}-{MODEL}"
+    if cache.exists() and len(list(cache.glob("m-*.png"))) == FRAMES:
+        cuts = [Image.open(cache / f"m-{i:03d}.png").convert("RGBA")
+                for i in range(FRAMES)]
+        print(f"  mattes     {FRAMES} frames from cache ({cache.name})")
     else:
-        frames, w0, h0 = decode()
-        print(f"  decoded    {len(frames)} frames @ {w0}x{h0} from {CLIP.name} (0–{T_END}s)")
-        step = (len(frames) - 1) / (MATTES - 1)
-        picked = [frames[round(i * step)] for i in range(MATTES)]
-        pool = [matte(im, sess, remove) for im in picked]
+        # CPU provider, pinned: CoreML crashed mid-run when another
+        # model was loaded beside it, and isnet is fast on CPU anyway.
+        sess = new_session(MODEL, providers=["CPUExecutionProvider"])
+        cuts = [matte(im, sess, remove) for im in picked]
         cache.mkdir(parents=True, exist_ok=True)
-        for i, c in enumerate(pool):
+        for i, c in enumerate(cuts):
             c.save(cache / f"m-{i:03d}.png")
-        print(f"  matted     {len(pool)} frames (isnet, padded; cached)")
+        print(f"  matted     {len(cuts)} frames ({MODEL}, padded; cached)")
 
-    # Where does the whole-silhouette range end? Then sample it densely (the
-    # turn is watched closely) and the clipped tail sparsely (the dive is
-    # fast). This is what keeps 4+ seconds of footage inside the budget.
-    edge_ok = MATTES - 1
-    for i, c in enumerate(pool):
-        if not edge_free(np.asarray(c.split()[3])):
-            edge_ok = max(0, i - 1)
-            break
-    # The dive stops short of the clip's tail: past ~80% the arrangement fills
-    # the frame so completely that the matte keeps patches of studio grey
-    # between the blooms, and on white they read as dirt.
-    dive_end = min(MATTES - 1, round(MATTES * 0.80))
-    fl = [round(i * edge_ok / (FLOAT_N - 1)) for i in range(FLOAT_N)]
-    dv = [round(edge_ok + (j + 1) * (dive_end - edge_ok) / DIVE_N)
-          for j in range(DIVE_N)]
-    idxs = fl + dv
-    w, h = pool[0].size
-    if WIDTH < w:
-        cuts = [pool[i].resize((WIDTH, round(h * WIDTH / w)), Image.LANCZOS)
-                for i in idxs]
-    else:
-        cuts = [pool[i] for i in idxs]
     w, h = cuts[0].size
-    print(f"  sampled    {FLOAT_N}+{DIVE_N} of {MATTES} (silhouette holds to {edge_ok})")
+    if WIDTH < w:
+        cuts = [c.resize((WIDTH, round(h * WIDTH / w)), Image.LANCZOS) for c in cuts]
+        picked = [im.resize((WIDTH, round(h * WIDTH / w)), Image.LANCZOS)
+                  for im in picked]
+        w, h = cuts[0].size
 
-    # Temporal 1-2-1 smoothing on alpha, then cleanup. The cleanup is what
-    # makes the files small: WebP stores alpha LOSSLESSLY, and this outline —
-    # hundreds of petal and stem edges — is the most expensive mask a florist
-    # could draw. Matte noise alone ballooned the raw sequence to 21MB; after
-    # de-noising, a multi-level feather still cost more than the photograph.
-    # So: hard floor, hard ceiling, ONE mid level for the 1px feather, and no
-    # colour under fully-transparent pixels.
-    alphas = [np.asarray(c.split()[3], dtype=np.uint16) for c in cuts]
-    cleaned = []
+    # The ribbon rescue, done with geometry rather than colour: the satin in
+    # this footage measures the same luminance as the studio wall (that is
+    # exactly why the model deletes it), so no per-pixel test can tell them
+    # apart. What CAN: the ribbon runs deep inside the bouquet's mass. So the
+    # matte's solid region is morphologically closed (bridging gaps to ~90px)
+    # and then eroded back past its own boundary — and anything the matte
+    # left transparent inside that deep-interior envelope is restored with
+    # its original pixels. The eroded guard keeps the outline matte-carved,
+    # so no webbing appears between the outer spikes; the few real stem-gaps
+    # that get filled show the wall greys the actual photograph shows there,
+    # which reads as depth, not dirt.
+    from scipy import ndimage
+    CLOSE_IT = 24        # dilation reach ~48px — bridges the ribbon band
+    GUARD_IT = 9         # extra erosion ~18px — keeps the outline carved
+    raw_alphas = []
+    restored_px = 0
     for i, c in enumerate(cuts):
-        a0 = alphas[max(0, i - 1)]
-        a2 = alphas[min(len(alphas) - 1, i + 1)]
-        a = ((a0 + 2 * alphas[i] + a2) // 4).astype(np.uint8)
+        a = np.asarray(c.split()[3]).copy()
         a[a < 40] = 0
         a[a > 215] = 255
-        # A mid-alpha pixel is either the 1px feather around a petal or a
-        # patch of faint background haze the matte half-kept. Snapping both to
-        # one level amplified the haze into visible grey blobs — so keep the
-        # mid level only within a few pixels of solid coverage (the feather)
-        # and drop the rest.
+        solid = a == 255
+        env = ndimage.binary_dilation(solid, iterations=CLOSE_IT)
+        env = ndimage.binary_erosion(env, iterations=CLOSE_IT + GUARD_IT,
+                                     border_value=1)
+        restore = env & (a < 40)
+        restored_px += int(restore.sum())
+        a[restore] = 255
+        raw_alphas.append(a.astype(np.uint16))
+
+    cleaned = []
+    for i, c in enumerate(cuts):
+        a0 = raw_alphas[max(0, i - 1)]
+        a2 = raw_alphas[min(len(raw_alphas) - 1, i + 1)]
+        a = ((a0 + 2 * raw_alphas[i] + a2) // 4).astype(np.uint8)
+        a[a < 40] = 0
+        a[a > 215] = 255
         mid = (a > 0) & (a < 255)
         near = np.asarray(Image.fromarray(((a == 255) * 255).astype(np.uint8))
                           .filter(ImageFilter.MaxFilter(7))) > 0
         a[mid & ~near] = 0
         a[mid & near] = 128
-        rgba = np.asarray(c.convert("RGBA")).copy()
-        rgba[..., 3] = a
+        # Colour always comes from the source — the matte's own RGB is
+        # zeroed under removals and untrustworthy at the feather.
+        src = np.asarray(picked[i].convert("RGB"))
+        rgba = np.dstack([src, a]).astype(np.uint8)
         rgba[a == 0] = 0
-        cleaned.append(Image.fromarray(rgba, "RGBA"))
+        cleaned.append(Image.fromarray(rgba))
     cuts = cleaned
+    print(f"  restored   {restored_px // len(cuts)} px/frame inside the envelope")
 
     # Common crop: drop margins that are transparent in every frame.
     union = np.zeros((h, w), bool)
@@ -205,33 +204,35 @@ def main():
     y0 = max(0, ys.min() - 6); y1 = min(h, ys.max() + 7)
     x1 -= (x1 - x0) % 2; y1 -= (y1 - y0) % 2
     cuts = [c.crop((x0, y0, x1, y1)) for c in cuts]
-    cw, ch = cuts[0].size
-    print(f"  cropped    {cw}x{ch}")
+    w, h = cuts[0].size
+    print(f"  cropped    {w}x{h}")
 
-    # The float/dive boundary is known by construction: the last float frame.
-    safe = FLOAT_N - 1
+    # Every frame should be whole; report any that is not, loudly.
+    for i, c in enumerate(cuts):
+        a = np.asarray(c.split()[3]) > 40
+        touch = int(a[:2].sum() + a[-2:].sum() + a[:, :2].sum() + a[:, -2:].sum())
+        if touch > 900:
+            print(f"  ! frame {i} touches the edge ({touch}px) — check the footage")
 
-    # Pick q from a 10-frame sample first, then encode the set once — the
-    # full-set ladder re-encoded 92 frames per step and took most of an hour.
+    # q from a 10-frame sample, then one encode of the set.
     sample = cuts[:: max(1, len(cuts) // 10)]
     q = Q_START
-    while q > 56:
+    while q > 54:
         est = sum(len(encode(c, q)) for c in sample) / len(sample) * len(cuts) / 1024
         if est <= BUDGET_KB:
             break
         q -= 4
-    # Dive frames are shown scaled well past 1x — they carry more quality.
-    blobs = [encode(c, q + (10 if i > safe else 0)) for i, c in enumerate(cuts)]
+    blobs = [encode(c, q) for c in cuts]
     total = sum(len(b) for b in blobs) / 1024
     for i, b in enumerate(blobs):
         (OUT / f"f-{i:03d}.webp").write_bytes(b)
 
-    cuts[0].save(OUT / "poster.webp", "WEBP", quality=82, method=6)
+    cuts[0].save(OUT / "poster.webp", "WEBP", quality=82, method=4)
 
     (ROOT / "js" / "hero-manifest.js").write_text(
         "// generated by scripts/build_hero.py — do not edit\n"
         "export const HERO = " + json.dumps({
-            "count": len(cuts), "w": cw, "h": ch, "safe": safe,
+            "count": len(cuts), "w": w, "h": h,
             "path": "assets/hero/f-", "ext": ".webp",
             "poster": "assets/hero/poster.webp",
         }, indent=1) + ";\n", encoding="utf-8")

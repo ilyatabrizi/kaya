@@ -252,7 +252,11 @@ ul,ol{margin:0;padding:0;list-style:none}
 .hero__posterimg{display:block;width:100%;height:auto;
   transition:opacity .4s var(--ease)}
 .hero__posterimg.is-gone{opacity:0}
-.hero__obj{position:absolute;inset:0;width:100%;height:100%}
+/* The canvas spans the whole stage at device resolution; the zoom is drawn
+   into it rather than CSS-scaled, which is where the dive's sharpness
+   comes from. */
+.hero__obj{position:absolute;inset:0;z-index:2;width:100%;height:100%;
+  pointer-events:none}
 .hero__shadow{
   position:absolute;z-index:-1;left:50%;bottom:2.5%;
   width:56%;height:5.5%;transform:translateX(-50%);
@@ -271,14 +275,12 @@ ul,ol{margin:0;padding:0;list-style:none}
   font-size:clamp(24px,6vw,34px);font-weight:600;letter-spacing:-.01em;
 }
 .hero__cap p{font-size:13px;color:var(--muted);max-width:34ch;line-height:1.7}
-/* By the time the caption fades in, the dive has filled the screen with
-   petals — so it speaks in white over its own scrim. The reduced-motion hero
-   never adds this class and stays ink on white. */
-.hero__cap.is-over{color:#fff;text-shadow:0 1px 18px rgba(11,11,12,.5)}
-.hero__cap.is-over p{color:rgba(255,255,255,.9)}
+/* By the time the caption fades in, the dive has landed on the white urn and
+   the pale satin — light ground — so the caption stays ink and stands on a
+   frosted white scrim that melts into the page. */
 .hero__cap.is-over::before{
-  content:'';position:absolute;z-index:-1;inset:-40px -30px -240px;
-  background:linear-gradient(to top,rgba(11,11,12,.52),rgba(11,11,12,.26) 45%,transparent);
+  content:'';position:absolute;z-index:-1;inset:-46px -40px -240px;
+  background:linear-gradient(to top,rgba(255,255,255,.96),rgba(255,255,255,.82) 46%,transparent);
   pointer-events:none;
 }
 
