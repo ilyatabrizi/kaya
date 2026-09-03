@@ -152,6 +152,22 @@ def test_home(page):
           page.locator('.foot a[href^="tel:"]').count() >= 2)
     check("instagram handle is right",
           page.locator('a[href*="instagram.com/kaya_flwr"]').count() >= 1)
+    check("footer carries the Alpha signature",
+          page.locator('.foot a[href*="alphaa.agency"]', has_text="Alpha Agency")
+          .count() == 1
+          # The mark is lazy-loaded, so bring the footer into view first.
+          and page.evaluate("""async () => {
+            document.querySelector('.alphasig')?.scrollIntoView();
+            for (let i = 0; i < 20; i++) {
+              const im = document.querySelector('.alphasig__mark');
+              if (im && im.naturalWidth > 0) return true;
+              await new Promise(r => setTimeout(r, 150));
+            }
+            return false;
+          }"""),
+          "signature missing or mark failed to load")
+    page.evaluate("scrollTo(0, 0)")
+    settle(page, 300)
 
     page.evaluate("scrollTo(0, document.querySelector('.hero').getBoundingClientRect().height + 200)")
     settle(page, 500)

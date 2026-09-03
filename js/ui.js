@@ -281,7 +281,25 @@ export function footer() {
   );
 
   grid.append(about, contact, links);
+
+  // The house signature — same lockup as every Alpha build.
+  const powered = el('a', {
+    class: 'alphasig', href: 'https://alphaa.agency',
+    target: '_blank', rel: 'noopener',
+    'aria-label': 'Powered by Alpha Agency',
+  },
+    el('img', {
+      class: 'alphasig__mark', src: 'assets/brand/alpha-sig.png', alt: '',
+      width: '440', height: '335', loading: 'lazy', decoding: 'async',
+    }),
+    el('span', { class: 'alphasig__txt' },
+      el('span', { class: 'alphasig__by', text: 'Powered by' }),
+      el('span', { class: 'alphasig__name', text: 'Alpha Agency' }),
+    ),
+  );
+
   f.append(el('div', { class: 'wrap' }, grid,
+    el('div', { class: 'foot__powered' }, powered),
     el('div', { class: 'foot__legal' },
       el('span', { text: `© ${new Date().getFullYear()} KAYA · Tabriz` }),
       el('a', { href: '#/crm', text: 'Staff access' }),
